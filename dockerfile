@@ -16,5 +16,4 @@ COPY alembic.ini entrypoint.sh ./
 RUN poetry install --only main --no-interaction --no-ansi
 RUN chmod +x entrypoint.sh
 
-EXPOSE 8000
 ENTRYPOINT ["./entrypoint.sh"]

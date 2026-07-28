@@ -3,4 +3,4 @@ set -e
 
 alembic upgrade head
 
-exec uvicorn pasztar.app:app --host 0.0.0.0 --port 8000
+exec uvicorn pasztar.app:app --host "$APP_HOST" --port "$APP_PORT"

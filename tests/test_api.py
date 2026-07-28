@@ -1,5 +1,8 @@
 import base64
+import os
 from datetime import UTC, datetime
+
+os.environ.setdefault("DATABASE_URL", "sqlite://")
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
