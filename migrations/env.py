@@ -4,14 +4,14 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from pasztar.core.db.models import Base
-from pasztar.core.db.session import DATABASE_URL
+from pasztar.core.settings import settings
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.database_url)
 target_metadata = Base.metadata
 
 

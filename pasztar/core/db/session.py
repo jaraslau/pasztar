@@ -1,15 +1,10 @@
-import os
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from fastapi import Request
 from sqlalchemy.orm import Session, sessionmaker
 
-DATABASE_URL = os.environ["DATABASE_URL"]
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-
-
-def get_db() -> Generator[Session, None, None]:
-    with SessionLocal() as session:
+def get_db(request: Request) -> Generator[Session, None, None]:
+    session_factory: sessionmaker[Session] = request.app.state.session_factory
+    with session_factory() as session:
         yield session
