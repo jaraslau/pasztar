@@ -1,0 +1,27 @@
+services:
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://pasztar:pasztar@db:5432/pasztar
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pasztar
+      POSTGRES_USER: pasztar
+      POSTGRES_PASSWORD: pasztar
+    volumes:
+      - pasztar-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pasztar -d pasztar"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pasztar-postgres:
