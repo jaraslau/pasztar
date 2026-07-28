@@ -10,8 +10,11 @@ RUN pip install "poetry==$POETRY_VERSION"
 
 COPY pyproject.toml poetry.lock readme ./
 COPY pasztar ./pasztar
+COPY migrations ./migrations
+COPY alembic.ini entrypoint.sh ./
 
 RUN poetry install --only main --no-interaction --no-ansi
+RUN chmod +x entrypoint.sh
 
 EXPOSE 8000
-CMD ["uvicorn", "pasztar.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["./entrypoint.sh"]

@@ -1,1 +1,44 @@
 pasztar
+=======
+
+VPN-local encrypted message node.
+
+Run:
+
+```sh
+docker compose up --build
+```
+
+API listens on `http://localhost:8000`. The container runs `alembic upgrade head`
+before starting Uvicorn.
+
+Migrations:
+
+```sh
+poetry run alembic upgrade head
+```
+
+Clients store private keys locally. The node stores public keys, presence,
+nonces, and ciphertext only.
+
+Signed request payload:
+
+```text
+METHOD
+/path
+X-Timestamp
+X-Nonce
+sha256(raw request body)
+```
+
+Endpoints:
+
+- `GET /health`
+- `POST /clients`
+- `PATCH /clients/me`
+- `GET /clients`
+- `POST /heartbeat`
+- `POST /messages`
+- `GET /messages`
+- `POST /messages/{message_id}/delivered`
+- `POST /messages/{message_id}/read`

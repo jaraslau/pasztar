@@ -7,10 +7,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from pasztar.auth import _signature_payload
-from pasztar.db import get_db
-from pasztar.main import app
-from pasztar.models import Base
+from pasztar.app import app
+from pasztar.core.auth import signature_payload
+from pasztar.core.db.models import Base
+from pasztar.core.db.session import get_db
 
 
 engine = create_engine(
@@ -40,7 +40,7 @@ def keypair():
 def signed(method: str, path: str, body: bytes, client_id: str, private):
     timestamp = datetime.now(UTC).isoformat()
     nonce = f"{client_id}-{timestamp}"
-    payload = _signature_payload(method, path, timestamp, nonce, body)
+    payload = signature_payload(method, path, timestamp, nonce, body)
     return {
         "X-Client-Id": client_id,
         "X-Timestamp": timestamp,

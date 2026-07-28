@@ -1,6 +1,8 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://pasztar:pasztar@db:5432/pasztar
     ports:
