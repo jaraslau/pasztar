@@ -24,6 +24,7 @@ def upgrade() -> None:
             sa.Column("id", sa.String(length=80), nullable=False),
             sa.Column("display_name", sa.String(length=120), nullable=False),
             sa.Column("public_key", sa.Text(), nullable=False),
+            sa.Column("encryption_public_key", sa.Text(), nullable=False),
             sa.Column("fingerprint", sa.String(length=64), nullable=False),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("last_seen", sa.DateTime(timezone=True), nullable=False),

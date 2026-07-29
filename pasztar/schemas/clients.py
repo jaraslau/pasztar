@@ -7,6 +7,7 @@ class ClientCreate(BaseModel):
     id: str = Field(min_length=1, max_length=80)
     display_name: str = Field(min_length=1, max_length=120)
     public_key: str = Field(min_length=1)
+    encryption_public_key: str = Field(min_length=1)
 
 
 class ClientOut(BaseModel):
@@ -15,6 +16,7 @@ class ClientOut(BaseModel):
     id: str
     display_name: str
     public_key: str
+    encryption_public_key: str | None
     fingerprint: str
     last_seen: datetime
 

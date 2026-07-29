@@ -20,6 +20,7 @@ def register_client(payload: ClientCreate, db: Session = Depends(get_db)) -> Cli
         id=payload.id,
         display_name=payload.display_name,
         public_key=payload.public_key,
+        encryption_public_key=payload.encryption_public_key,
         fingerprint=fingerprint(payload.public_key),
         last_seen=now(),
     )
@@ -39,6 +40,7 @@ def update_client(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "client id mismatch")
     client.display_name = payload.display_name
     client.public_key = payload.public_key
+    client.encryption_public_key = payload.encryption_public_key
     client.fingerprint = fingerprint(payload.public_key)
     client.last_seen = now()
     db.commit()

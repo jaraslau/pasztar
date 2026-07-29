@@ -48,6 +48,22 @@ def keypair():
     return private, base64.b64encode(public).decode()
 
 
+def register_client(client_id: str, display_name: str, public_key: str) -> str:
+    _, encryption_public_key = keypair()
+    response = client.post(
+        "/clients",
+        json={
+            "id": client_id,
+            "display_name": display_name,
+            "public_key": public_key,
+            "encryption_public_key": encryption_public_key,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["encryption_public_key"] == encryption_public_key
+    return encryption_public_key
+
+
 def signed(
     method: str,
     path: str,
@@ -72,14 +88,8 @@ def test_register_send_fetch_and_replay_rejection():
     alice_private, alice_public = keypair()
     _, bob_public = keypair()
 
-    assert client.post(
-        "/clients",
-        json={"id": "alice", "display_name": "Alice", "public_key": alice_public},
-    ).status_code == 201
-    assert client.post(
-        "/clients",
-        json={"id": "bob", "display_name": "Bob", "public_key": bob_public},
-    ).status_code == 201
+    register_client("alice", "Alice", alice_public)
+    register_client("bob", "Bob", bob_public)
 
     body = b'{"id":"m1","recipient_id":"bob","ciphertext":"opaque-ciphertext"}'
     headers = signed("POST", "/messages", body, "alice", alice_private)
@@ -98,10 +108,7 @@ def test_register_send_fetch_and_replay_rejection():
 
 def test_auth_rejects_unknown_client_bad_signature_and_stale_timestamp():
     alice_private, alice_public = keypair()
-    assert client.post(
-        "/clients",
-        json={"id": "alice", "display_name": "Alice", "public_key": alice_public},
-    ).status_code == 201
+    register_client("alice", "Alice", alice_public)
 
     body = b'{"id":"m1","recipient_id":"alice","ciphertext":"opaque"}'
 
@@ -137,14 +144,7 @@ def test_duplicate_message_id_recipient_isolation_and_limit():
         ("bob", "Bob", bob_public),
         ("charlie", "Charlie", charlie_public),
     ]:
-        assert client.post(
-            "/clients",
-            json={
-                "id": client_id,
-                "display_name": display_name,
-                "public_key": public_key,
-            },
-        ).status_code == 201
+        register_client(client_id, display_name, public_key)
 
     for message_id in ["m1", "m2", "m3"]:
         body = (
@@ -173,3 +173,19 @@ def test_duplicate_message_id_recipient_isolation_and_limit():
     charlie_messages = client.get("/messages", headers=charlie_headers)
     assert charlie_messages.status_code == 200
     assert charlie_messages.json() == []
+
+
+def test_client_directory_exposes_encryption_keys():
+    alice_private, alice_public = keypair()
+    bob_private, bob_public = keypair()
+    alice_encryption_public = register_client("alice", "Alice", alice_public)
+    bob_encryption_public = register_client("bob", "Bob", bob_public)
+
+    headers = signed("GET", "/clients", b"", "alice", alice_private)
+    response = client.get("/clients", headers=headers)
+
+    assert response.status_code == 200
+    clients = {item["id"]: item for item in response.json()}
+    assert clients["alice"]["encryption_public_key"] == alice_encryption_public
+    assert clients["bob"]["encryption_public_key"] == bob_encryption_public
+    assert "private" not in str(response.json()).lower()

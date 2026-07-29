@@ -19,6 +19,7 @@ def test_settings_loads_env_file(tmp_path: Path):
                 "APP_PORT=9000",
                 "DEBUG_MODE=true",
                 "SIGNATURE_MAX_SKEW_SECONDS=42",
+                "EXTRA_VALUE=ignored",
             ]
         )
     )

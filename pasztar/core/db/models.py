@@ -18,6 +18,7 @@ class Client(Base):
     id: Mapped[str] = mapped_column(String(80), primary_key=True)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     public_key: Mapped[str] = mapped_column(Text, nullable=False)
+    encryption_public_key: Mapped[str | None] = mapped_column(Text)
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
