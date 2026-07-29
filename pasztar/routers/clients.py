@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from pasztar.core.auth import fingerprint, require_client
+from pasztar.core.auth import require_client
 from pasztar.core.db.models import Client, now
 from pasztar.core.db.session import get_db
+from pasztar.core.signing import fingerprint
 from pasztar.schemas.clients import ClientCreate, ClientOut, HeartbeatOut
 
 router = APIRouter()

@@ -1,5 +1,5 @@
 import base64
-import hashlib
+import binascii
 from datetime import UTC, datetime, timedelta
 
 from cryptography.exceptions import InvalidSignature
@@ -11,21 +11,7 @@ from sqlalchemy.orm import Session
 from pasztar.core.db.models import Client, Nonce, now
 from pasztar.core.db.session import get_db
 from pasztar.core.settings import settings
-
-
-def fingerprint(public_key: str) -> str:
-    return hashlib.sha256(public_key.encode()).hexdigest()
-
-
-def signature_payload(
-    method: str,
-    path: str,
-    timestamp: str,
-    nonce: str,
-    body: bytes,
-) -> bytes:
-    body_hash = hashlib.sha256(body).hexdigest()
-    return f"{method}\n{path}\n{timestamp}\n{nonce}\n{body_hash}".encode()
+from pasztar.core.signing import signature_payload
 
 
 async def require_client(
@@ -36,7 +22,8 @@ async def require_client(
     nonce: str = Header(alias="X-Nonce"),
     signature: str = Header(alias="X-Signature"),
 ) -> Client:
-    if client := db.get(Client, client_id) is None:
+    client = db.get(Client, client_id)
+    if client is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "unknown client")
 
     try:
@@ -52,17 +39,20 @@ async def require_client(
 
     try:
         key = Ed25519PublicKey.from_public_bytes(base64.b64decode(client.public_key))
+        target = request.url.path
+        if request.url.query:
+            target = f"{target}?{request.url.query}"
         key.verify(
             base64.b64decode(signature),
             signature_payload(
                 request.method,
-                request.url.path,
+                target,
                 timestamp,
                 nonce,
                 await request.body(),
             ),
         )
-    except (InvalidSignature, ValueError) as exc:
+    except (InvalidSignature, ValueError, binascii.Error) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad signature") from exc
 
     db.add(Nonce(client_id=client.id, nonce=nonce))

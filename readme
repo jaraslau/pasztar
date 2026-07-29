@@ -19,6 +19,15 @@ Migrations:
 poetry run alembic upgrade head
 ```
 
+CLI helper:
+
+```sh
+poetry run pasztar keygen
+poetry run pasztar register --client-id alice --display-name Alice --public-key PUBLIC_KEY
+poetry run pasztar send --client-id alice --private-key PRIVATE_KEY --recipient-id bob --ciphertext OPAQUE_TEXT
+poetry run pasztar fetch --client-id alice --private-key PRIVATE_KEY
+```
+
 Clients store private keys locally. The node stores public keys, presence,
 nonces, and ciphertext only.
 
@@ -26,7 +35,7 @@ Signed request payload:
 
 ```text
 METHOD
-/path
+/path[?query]
 X-Timestamp
 X-Nonce
 sha256(raw request body)

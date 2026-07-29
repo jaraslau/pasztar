@@ -10,8 +10,8 @@ class Settings(BaseSettings):
 
     database_url: str
     debug_mode: bool = False
-    app_host: str
-    app_port: int
+    app_host: str = "0.0.0.0"
+    app_port: int = 8000
     signature_max_skew_seconds: int = 300
 
 
