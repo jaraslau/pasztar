@@ -17,9 +17,14 @@ const els = {
   appStatus: document.querySelector("#app-status"),
   clients: document.querySelector("#clients"),
   refreshClients: document.querySelector("#refresh-clients"),
+  openSettings: document.querySelector("#open-settings"),
+  closeSettings: document.querySelector("#close-settings"),
+  settingsModal: document.querySelector("#settings-modal"),
+  identitySummary: document.querySelector("#identity-summary"),
   chatTitle: document.querySelector("#chat-title"),
   messages: document.querySelector("#messages"),
   exportIdentity: document.querySelector("#export-identity"),
+  resetIdentity: document.querySelector("#reset-identity"),
   refreshMessages: document.querySelector("#refresh-messages"),
   messageForm: document.querySelector("#message-form"),
   messageText: document.querySelector("#message-text"),
@@ -108,6 +113,7 @@ async function encryptionPublicKey(value) {
 function saveIdentity(identity) {
   state.identity = identity;
   status(`Loaded ${identity.clientId} (${identity.fingerprint.slice(0, 12)})`);
+  els.identitySummary.textContent = `${identity.clientId} (${identity.fingerprint.slice(0, 12)})`;
 }
 
 async function exportIdentity() {
@@ -143,6 +149,19 @@ async function exportIdentity() {
   link.click();
   URL.revokeObjectURL(url);
   status("Identity bundle exported.");
+}
+
+function resetIdentity() {
+  localStorage.removeItem(storeKey);
+  location.replace("/setup.html");
+}
+
+function openSettings() {
+  els.settingsModal.showModal();
+}
+
+function closeSettings() {
+  els.settingsModal.close();
 }
 
 function loadIdentity() {
@@ -331,8 +350,16 @@ els.refreshClients.addEventListener("click", () => {
 els.refreshMessages.addEventListener("click", () => {
   loadMessages().catch((error) => status(error.message, true));
 });
+els.openSettings.addEventListener("click", openSettings);
+els.closeSettings.addEventListener("click", closeSettings);
 els.exportIdentity.addEventListener("click", () => {
   exportIdentity().catch((error) => status(error.message, true));
+});
+els.resetIdentity.addEventListener("click", resetIdentity);
+els.settingsModal.addEventListener("click", (event) => {
+  if (event.target === els.settingsModal) {
+    closeSettings();
+  }
 });
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));

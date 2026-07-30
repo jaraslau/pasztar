@@ -7,13 +7,39 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <svg class="icon-defs" aria-hidden="true">
+      <symbol id="icon-cog" viewBox="0 0 24 24">
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+        <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.06.06a2.1 2.1 0 0 1-2.97 2.97l-.06-.06a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.08 1.65V21a2.1 2.1 0 0 1-4.2 0v-.09a1.8 1.8 0 0 0-1.17-1.65 1.8 1.8 0 0 0-1.98.36l-.06.06a2.1 2.1 0 0 1-2.97-2.97l.06-.06a1.8 1.8 0 0 0 .36-1.98 1.8 1.8 0 0 0-1.65-1.08H3a2.1 2.1 0 0 1 0-4.2h.09a1.8 1.8 0 0 0 1.65-1.17 1.8 1.8 0 0 0-.36-1.98l-.06-.06a2.1 2.1 0 1 1 2.97-2.97l.06.06a1.8 1.8 0 0 0 1.98.36h.09A1.8 1.8 0 0 0 10.5 3V3a2.1 2.1 0 0 1 4.2 0v.09a1.8 1.8 0 0 0 1.08 1.65 1.8 1.8 0 0 0 1.98-.36l.06-.06a2.1 2.1 0 0 1 2.97 2.97l-.06.06a1.8 1.8 0 0 0-.36 1.98v.09A1.8 1.8 0 0 0 21 10.5H21a2.1 2.1 0 0 1 0 4.2h-.09A1.8 1.8 0 0 0 19.4 15Z" />
+      </symbol>
+      <symbol id="icon-refresh" viewBox="0 0 24 24">
+        <path d="M20 12a8 8 0 0 1-14.93 4" />
+        <path d="M4 12A8 8 0 0 1 18.93 8" />
+        <path d="M18 3v5h-5" />
+        <path d="M6 21v-5h5" />
+      </symbol>
+      <symbol id="icon-send" viewBox="0 0 24 24">
+        <path d="m22 2-7 20-4-9-9-4 20-7Z" />
+        <path d="M22 2 11 13" />
+      </symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24">
+        <path d="M12 3v12" />
+        <path d="m7 10 5 5 5-5" />
+        <path d="M5 21h14" />
+      </symbol>
+      <symbol id="icon-x" viewBox="0 0 24 24">
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </symbol>
+    </svg>
+
     <main class="shell">
       <aside class="sidebar">
         <section class="panel clients-panel">
           <div class="section-head">
             <h2>Clients</h2>
-            <button id="refresh-clients" type="button" class="icon-button" title="Refresh">
-              Refresh
+            <button id="refresh-clients" type="button" class="icon-button" title="Refresh clients" aria-label="Refresh clients">
+              <svg class="icon"><use href="#icon-refresh"></use></svg>
             </button>
           </div>
           <p id="app-status" class="status"></p>
@@ -28,8 +54,12 @@
             <h2 id="chat-title">Select a client</h2>
           </div>
           <div class="actions">
-            <button id="export-identity" type="button" class="secondary">Export</button>
-            <button id="refresh-messages" type="button" class="secondary">Fetch</button>
+            <button id="refresh-messages" type="button" class="icon-button" title="Refresh messages" aria-label="Refresh messages">
+              <svg class="icon"><use href="#icon-refresh"></use></svg>
+            </button>
+            <button id="open-settings" type="button" class="icon-button" title="Settings" aria-label="Settings">
+              <svg class="icon"><use href="#icon-cog"></use></svg>
+            </button>
           </div>
         </header>
 
@@ -37,10 +67,29 @@
 
         <form id="message-form" class="composer">
           <textarea id="message-text" rows="3" placeholder="Message" required></textarea>
-          <button type="submit">Send</button>
+          <button type="submit" class="send-button" title="Send" aria-label="Send">
+            <svg class="icon"><use href="#icon-send"></use></svg>
+          </button>
         </form>
       </section>
     </main>
+
+    <dialog id="settings-modal" class="modal">
+      <div class="modal-head">
+        <h2>Settings</h2>
+        <button id="close-settings" type="button" class="icon-button" title="Close" aria-label="Close">
+          <svg class="icon"><use href="#icon-x"></use></svg>
+        </button>
+      </div>
+      <p id="identity-summary" class="status"></p>
+      <div class="modal-actions">
+        <button id="export-identity" type="button" class="secondary">
+          <svg class="icon"><use href="#icon-download"></use></svg>
+          Export identity
+        </button>
+        <button id="reset-identity" type="button" class="danger-button">Reset local identity</button>
+      </div>
+    </dialog>
 
     <template id="client-template">
       <button class="client" type="button">

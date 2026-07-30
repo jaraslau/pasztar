@@ -37,6 +37,10 @@ button {
   background: var(--accent);
   color: white;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   min-height: 38px;
   padding: 0 14px;
 }
@@ -54,6 +58,36 @@ button.icon-button {
 button.secondary:hover,
 button.icon-button:hover {
   background: #333333;
+}
+
+button.danger-button {
+  background: #3a1d1d;
+}
+
+button.danger-button:hover {
+  background: #522626;
+}
+
+.icon-defs {
+  display: none;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  flex: none;
+}
+
+.icon-button,
+.send-button {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
 }
 
 input,
@@ -150,6 +184,32 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.modal {
+  width: min(100% - 32px, 420px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 18px;
+}
+
+.modal::backdrop {
+  background: rgb(0 0 0 / 70%);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .status {
