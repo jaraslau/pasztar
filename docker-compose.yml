@@ -2,7 +2,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: dockerfile
+      dockerfile: dockerfile.backend
     env_file:
       - .env
     ports:
@@ -13,8 +13,8 @@ services:
 
   frontend:
     build:
-      context: ./pasztar/frontend
-      dockerfile: dockerfile
+      context: .
+      dockerfile: dockerfile.frontend
     env_file:
       - .env
     ports:

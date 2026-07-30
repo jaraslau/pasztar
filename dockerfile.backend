@@ -4,14 +4,14 @@ ENV POETRY_VERSION=1.8.4 \
     POETRY_VIRTUALENVS_CREATE=false \
     PYTHONUNBUFFERED=1
 
-WORKDIR /srv/pasztar
+WORKDIR /srv/pasztar/backend
 
 RUN pip install "poetry==$POETRY_VERSION"
 
-COPY pyproject.toml poetry.lock readme ./
-COPY pasztar ./pasztar
-COPY migrations ./migrations
-COPY alembic.ini entrypoint.sh ./
+COPY pasztar/backend/pyproject.toml pasztar/backend/poetry.lock ./
+COPY pasztar/backend/src ./src
+COPY pasztar/backend/migrations ./migrations
+COPY pasztar/backend/alembic.ini pasztar/backend/entrypoint.sh ./
 
 RUN poetry install --only main --no-interaction --no-ansi
 RUN chmod +x entrypoint.sh

@@ -3,8 +3,7 @@ name = "pasztar"
 version = "0.1.0"
 description = "VPN-local encrypted message node"
 authors = ["jaraslau"]
-readme = "readme"
-packages = [{ include = "pasztar" }]
+packages = [{ include = "pasztar", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"

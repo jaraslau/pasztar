@@ -1,0 +1,5 @@
+FROM nginx:1.27-alpine
+
+COPY pasztar/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY pasztar/frontend/index.html pasztar/frontend/setup.html /usr/share/nginx/html/
+COPY pasztar/frontend/static /usr/share/nginx/html/static
