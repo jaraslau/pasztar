@@ -42,6 +42,14 @@ def reset_db():
     Base.metadata.create_all(bind=engine)
 
 
+def test_index_serves_web_client():
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Pasztar" in response.text
+    assert "/static/app.js" in response.text
+
+
 def keypair():
     private = Ed25519PrivateKey.generate()
     public = private.public_key().public_bytes_raw()

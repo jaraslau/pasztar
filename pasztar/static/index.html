@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pasztar</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <aside class="sidebar">
+        <section class="panel identity">
+          <h1>Pasztar</h1>
+          <form id="identity-form" class="stack">
+            <label>
+              Client ID
+              <input id="client-id" name="client-id" autocomplete="username" required />
+            </label>
+            <label>
+              Display name
+              <input id="display-name" name="display-name" autocomplete="name" required />
+            </label>
+            <div class="actions">
+              <button type="submit">Register</button>
+              <button id="new-identity" type="button" class="secondary">New keys</button>
+            </div>
+          </form>
+          <p id="identity-status" class="status"></p>
+        </section>
+
+        <section class="panel clients-panel">
+          <div class="section-head">
+            <h2>Clients</h2>
+            <button id="refresh-clients" type="button" class="icon-button" title="Refresh">
+              Refresh
+            </button>
+          </div>
+          <div id="clients" class="clients"></div>
+        </section>
+      </aside>
+
+      <section class="chat">
+        <header class="chat-head">
+          <div>
+            <p class="eyebrow">Direct messages</p>
+            <h2 id="chat-title">Select a client</h2>
+          </div>
+          <button id="refresh-messages" type="button" class="secondary">Fetch</button>
+        </header>
+
+        <div id="messages" class="messages"></div>
+
+        <form id="message-form" class="composer">
+          <textarea id="message-text" rows="3" placeholder="Message" required></textarea>
+          <button type="submit">Send</button>
+        </form>
+      </section>
+    </main>
+
+    <template id="client-template">
+      <button class="client" type="button">
+        <span class="client-name"></span>
+        <span class="client-id"></span>
+      </button>
+    </template>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
