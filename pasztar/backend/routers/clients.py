@@ -2,17 +2,29 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from pasztar.core.auth import require_client
-from pasztar.core.db.models import Client, now
-from pasztar.core.db.session import get_db
-from pasztar.core.signing import fingerprint
-from pasztar.schemas.clients import ClientCreate, ClientOut, HeartbeatOut
+from pasztar.backend.core.auth import require_client
+from pasztar.backend.core.db.models import Client, now
+from pasztar.backend.core.db.session import get_db
+from pasztar.backend.core.settings import settings
+from pasztar.backend.core.signing import fingerprint
+from pasztar.backend.core.tokens import issue_identity_token
+from pasztar.backend.schemas.clients import (
+    ClientCreate,
+    ClientOut,
+    ClientRegisterOut,
+    ClientUpdate,
+    HeartbeatOut,
+)
 
 router = APIRouter()
 
 
-@router.post("/clients", response_model=ClientOut, status_code=status.HTTP_201_CREATED)
-def register_client(payload: ClientCreate, db: Session = Depends(get_db)) -> Client:
+@router.post(
+    "/clients",
+    response_model=ClientRegisterOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_client(payload: ClientCreate, db: Session = Depends(get_db)) -> ClientRegisterOut:
     if db.get(Client, payload.id) is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "client already exists")
 
@@ -27,12 +39,23 @@ def register_client(payload: ClientCreate, db: Session = Depends(get_db)) -> Cli
     db.add(client)
     db.commit()
     db.refresh(client)
-    return client
+    return ClientRegisterOut(
+        id=client.id,
+        display_name=client.display_name,
+        public_key=client.public_key,
+        encryption_public_key=client.encryption_public_key,
+        fingerprint=client.fingerprint,
+        last_seen=client.last_seen,
+        identity_token=issue_identity_token(
+            client.id,
+            settings.registration_token_secret,
+        ),
+    )
 
 
 @router.patch("/clients/me", response_model=ClientOut)
 def update_client(
-    payload: ClientCreate,
+    payload: ClientUpdate,
     db: Session = Depends(get_db),
     client: Client = Depends(require_client),
 ) -> Client:

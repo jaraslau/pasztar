@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pasztar</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="shell">
@@ -21,8 +21,8 @@
               <input id="display-name" name="display-name" autocomplete="name" required />
             </label>
             <div class="actions">
-              <button type="submit">Register</button>
-              <button id="new-identity" type="button" class="secondary">New keys</button>
+              <button id="register" type="submit">Register</button>
+              <button id="new-identity" type="button" class="secondary">Reset</button>
             </div>
           </form>
           <p id="identity-status" class="status"></p>
@@ -64,6 +64,6 @@
       </button>
     </template>
 
-    <script src="/static/app.js"></script>
+    <script src="/app.js"></script>
   </body>
 </html>

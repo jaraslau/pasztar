@@ -5,10 +5,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from pasztar.core.auth import require_client
-from pasztar.core.db.models import Client, Message, now
-from pasztar.core.db.session import get_db
-from pasztar.schemas.messages import MessageCreate, MessageOut
+from pasztar.backend.core.auth import require_client
+from pasztar.backend.core.db.models import Client, Message, now
+from pasztar.backend.core.db.session import get_db
+from pasztar.backend.schemas.messages import MessageCreate, MessageOut
 
 router = APIRouter()
 

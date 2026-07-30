@@ -1,13 +1,14 @@
 :root {
-  color-scheme: light;
-  --bg: #f7f7f4;
-  --panel: #ffffff;
-  --line: #d7d7d0;
-  --text: #20211f;
-  --muted: #696d68;
-  --accent: #0f766e;
-  --accent-dark: #115e59;
-  --danger: #b42318;
+  color-scheme: dark;
+  --bg: #101010;
+  --panel: #181818;
+  --panel-soft: #121212;
+  --line: #303030;
+  --text: #e8edf2;
+  --muted: #8f98a6;
+  --accent: #2f9e8f;
+  --accent-dark: #278176;
+  --danger: #ff6b6b;
 }
 
 * {
@@ -46,13 +47,13 @@ button:hover {
 
 button.secondary,
 button.icon-button {
-  background: #eef1ef;
+  background: #262626;
   color: var(--text);
 }
 
 button.secondary:hover,
 button.icon-button:hover {
-  background: #e1e5e2;
+  background: #333333;
 }
 
 input,
@@ -60,9 +61,13 @@ textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: white;
+  background: #0c0c0c;
   color: var(--text);
   padding: 10px 12px;
+}
+
+input:disabled {
+  opacity: 0.72;
 }
 
 textarea {
@@ -77,7 +82,7 @@ textarea {
 
 .sidebar {
   border-right: 1px solid var(--line);
-  background: #fbfbf8;
+  background: var(--panel-soft);
 }
 
 .panel {
@@ -153,7 +158,16 @@ label {
 
 .client.active {
   border-color: var(--accent);
-  outline: 2px solid rgb(15 118 110 / 18%);
+  outline: 2px solid rgb(47 158 143 / 24%);
+}
+
+.client.self {
+  border-color: #525252;
+  background: #202020;
+}
+
+.client.self.active {
+  border-color: var(--accent);
 }
 
 .client-name {
@@ -199,7 +213,7 @@ label {
 
 .message.own {
   align-self: flex-end;
-  border-color: #b7d8d3;
+  border-color: #3c8f84;
 }
 
 .message-text {

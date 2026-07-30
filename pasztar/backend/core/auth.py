@@ -8,10 +8,11 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from pasztar.core.db.models import Client, Nonce, now
-from pasztar.core.db.session import get_db
-from pasztar.core.settings import settings
-from pasztar.core.signing import signature_payload
+from pasztar.backend.core.db.models import Client, Nonce, now
+from pasztar.backend.core.db.session import get_db
+from pasztar.backend.core.settings import settings
+from pasztar.backend.core.signing import signature_payload
+from pasztar.backend.core.tokens import valid_identity_token
 
 
 async def require_client(
@@ -21,10 +22,18 @@ async def require_client(
     timestamp: str = Header(alias="X-Timestamp"),
     nonce: str = Header(alias="X-Nonce"),
     signature: str = Header(alias="X-Signature"),
+    identity_token: str = Header(alias="X-Identity-Token"),
 ) -> Client:
     client = db.get(Client, client_id)
     if client is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "unknown client")
+
+    if not valid_identity_token(
+        identity_token,
+        client.id,
+        settings.registration_token_secret,
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad identity token")
 
     try:
         sent_at = datetime.fromisoformat(timestamp)

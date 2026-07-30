@@ -3,7 +3,8 @@ import os
 import uuid
 from datetime import UTC, datetime, timedelta
 
-os.environ.setdefault("DATABASE_URL", "sqlite://")
+os.environ["DATABASE_URL"] = "sqlite://"
+os.environ["REGISTRATION_TOKEN_SECRET"] = "test-secret"
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -12,10 +13,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from pasztar.app import app
-from pasztar.core.db.models import Base
-from pasztar.core.db.session import get_db
-from pasztar.core.signing import signature_payload
+from pasztar.backend.app import app
+from pasztar.backend.core.db.models import Base
+from pasztar.backend.core.db.session import get_db
+from pasztar.backend.core.signing import signature_payload
+from pasztar.backend.core.tokens import issue_identity_token
 
 
 engine = create_engine(
@@ -42,14 +44,6 @@ def reset_db():
     Base.metadata.create_all(bind=engine)
 
 
-def test_index_serves_web_client():
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Pasztar" in response.text
-    assert "/static/app.js" in response.text
-
-
 def keypair():
     private = Ed25519PrivateKey.generate()
     public = private.public_key().public_bytes_raw()
@@ -69,7 +63,30 @@ def register_client(client_id: str, display_name: str, public_key: str) -> str:
     )
     assert response.status_code == 201
     assert response.json()["encryption_public_key"] == encryption_public_key
+    assert response.json()["identity_token"] == issue_identity_token(
+        client_id,
+        "test-secret",
+    )
     return encryption_public_key
+
+
+def test_register_assigns_identity_token():
+    _, alice_public = keypair()
+    response = client.post(
+        "/clients",
+        json={
+            "id": "alice",
+            "display_name": "Alice",
+            "public_key": alice_public,
+            "encryption_public_key": alice_public,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["identity_token"] == issue_identity_token(
+        "alice",
+        "test-secret",
+    )
 
 
 def signed(
@@ -80,6 +97,7 @@ def signed(
     private,
     timestamp: str | None = None,
     nonce: str | None = None,
+    identity_token: str | None = None,
 ):
     timestamp = timestamp or datetime.now(UTC).isoformat()
     nonce = nonce or str(uuid.uuid4())
@@ -89,6 +107,8 @@ def signed(
         "X-Timestamp": timestamp,
         "X-Nonce": nonce,
         "X-Signature": base64.b64encode(private.sign(payload)).decode(),
+        "X-Identity-Token": identity_token
+        or issue_identity_token(client_id, "test-secret"),
     }
 
 
@@ -129,6 +149,19 @@ def test_auth_rejects_unknown_client_bad_signature_and_stale_timestamp():
     bad_headers = signed("POST", "/messages", body, "alice", alice_private)
     bad_headers["X-Signature"] = base64.b64encode(b"bad").decode()
     assert client.post("/messages", content=body, headers=bad_headers).status_code == 401
+
+    bad_token_headers = signed(
+        "POST",
+        "/messages",
+        body,
+        "alice",
+        alice_private,
+        identity_token=issue_identity_token("bob", "test-secret"),
+    )
+    assert (
+        client.post("/messages", content=body, headers=bad_token_headers).status_code
+        == 401
+    )
 
     stale_headers = signed(
         "POST",

@@ -12,6 +12,7 @@ const els = {
   identityForm: document.querySelector("#identity-form"),
   clientId: document.querySelector("#client-id"),
   displayName: document.querySelector("#display-name"),
+  register: document.querySelector("#register"),
   newIdentity: document.querySelector("#new-identity"),
   identityStatus: document.querySelector("#identity-status"),
   clients: document.querySelector("#clients"),
@@ -122,6 +123,9 @@ function saveIdentity(identity) {
   localStorage.setItem(storeKey, JSON.stringify(identity));
   els.clientId.value = identity.clientId;
   els.displayName.value = identity.displayName;
+  els.clientId.disabled = true;
+  els.displayName.disabled = true;
+  els.register.disabled = true;
   status(`Loaded ${identity.clientId} (${identity.fingerprint.slice(0, 12)})`);
 }
 
@@ -131,6 +135,23 @@ function loadIdentity() {
     return;
   }
   saveIdentity(JSON.parse(raw));
+  loadClients().catch((error) => status(error.message, true));
+}
+
+function resetIdentity() {
+  state.identity = null;
+  state.clients = [];
+  state.selected = null;
+  localStorage.removeItem(storeKey);
+  els.clientId.disabled = false;
+  els.displayName.disabled = false;
+  els.register.disabled = false;
+  els.clientId.value = "";
+  els.displayName.value = "";
+  els.clients.replaceChildren();
+  els.messages.replaceChildren();
+  els.chatTitle.textContent = "Select a client";
+  status("");
 }
 
 async function signedFetch(path, options = {}) {
@@ -155,7 +176,7 @@ async function signedFetch(path, options = {}) {
     encoder.encode(payload),
   );
 
-  return fetch(path, {
+  return fetch(`/api${path}`, {
     ...options,
     method,
     body: body || undefined,
@@ -165,6 +186,7 @@ async function signedFetch(path, options = {}) {
       "X-Timestamp": timestamp,
       "X-Nonce": nonce,
       "X-Signature": b64(signature),
+      "X-Identity-Token": state.identity.identityToken,
       ...(options.headers || {}),
     },
   });
@@ -178,28 +200,22 @@ async function apiJson(response) {
   return data;
 }
 
-async function register() {
+async function register(identity) {
   const payload = {
-    id: state.identity.clientId,
-    display_name: state.identity.displayName,
-    public_key: state.identity.publicKey,
-    encryption_public_key: state.identity.encryptionPublicKey,
+    id: identity.clientId,
+    display_name: identity.displayName,
+    public_key: identity.publicKey,
+    encryption_public_key: identity.encryptionPublicKey,
   };
-  const response = await fetch("/clients", {
+  const response = await fetch("/api/clients", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (response.status === 409) {
-    await apiJson(
-      await signedFetch("/clients/me", {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      }),
-    );
-    return;
+    throw new Error("Client ID already exists.");
   }
-  await apiJson(response);
+  return apiJson(response);
 }
 
 async function loadClients() {
@@ -310,13 +326,12 @@ async function loadMessages() {
 function renderClients() {
   els.clients.replaceChildren();
   for (const client of state.clients) {
-    if (client.id === state.identity?.clientId) {
-      continue;
-    }
+    const isSelf = client.id === state.identity?.clientId;
     const node = els.clientTemplate.content.firstElementChild.cloneNode(true);
     node.classList.toggle("active", state.selected?.id === client.id);
+    node.classList.toggle("self", isSelf);
     node.querySelector(".client-name").textContent = client.display_name;
-    node.querySelector(".client-id").textContent = client.id;
+    node.querySelector(".client-id").textContent = isSelf ? `${client.id} - you` : client.id;
     node.addEventListener("click", async () => {
       state.selected = client;
       els.chatTitle.textContent = client.display_name;
@@ -332,13 +347,10 @@ els.identityForm.addEventListener("submit", async (event) => {
   try {
     const clientId = els.clientId.value.trim();
     const displayName = els.displayName.value.trim();
-    if (!state.identity || state.identity.clientId !== clientId) {
-      saveIdentity(await generateIdentity(clientId, displayName));
-    } else {
-      state.identity.displayName = displayName;
-      saveIdentity(state.identity);
-    }
-    await register();
+    const identity = await generateIdentity(clientId, displayName);
+    const registered = await register(identity);
+    identity.identityToken = registered.identity_token;
+    saveIdentity(identity);
     await loadClients();
     status("Registered.");
   } catch (error) {
@@ -347,18 +359,7 @@ els.identityForm.addEventListener("submit", async (event) => {
 });
 
 els.newIdentity.addEventListener("click", async () => {
-  try {
-    const clientId = els.clientId.value.trim();
-    const displayName = els.displayName.value.trim();
-    if (!clientId || !displayName) {
-      status("Enter client ID and display name first.", true);
-      return;
-    }
-    saveIdentity(await generateIdentity(clientId, displayName));
-    status("New local keys generated.");
-  } catch (error) {
-    status(error.message, true);
-  }
+  resetIdentity();
 });
 
 els.refreshClients.addEventListener("click", () => {

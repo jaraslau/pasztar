@@ -1,17 +1,12 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from pasztar.core.settings import settings
-from pasztar.routers import clients, health, messages
-
-BASE_DIR = Path(__file__).resolve().parent
+from pasztar.backend.core.settings import settings
+from pasztar.backend.routers import clients, health, messages
 
 
 @asynccontextmanager
@@ -36,9 +31,3 @@ app = FastAPI(title="Pasztar", lifespan=db_lifespan, debug=settings.debug_mode)
 app.include_router(health.router)
 app.include_router(clients.router)
 app.include_router(messages.router)
-app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-
-
-@app.get("/")
-def index() -> FileResponse:
-    return FileResponse(BASE_DIR / "static" / "index.html")
