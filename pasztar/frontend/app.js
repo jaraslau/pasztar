@@ -1,4 +1,5 @@
 const storeKey = "pasztar.identity";
+const selectedKey = "pasztar.selectedClient";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -6,6 +7,7 @@ const state = {
   identity: null,
   clients: [],
   selected: null,
+  refreshing: false,
 };
 
 const savedIdentity = localStorage.getItem(storeKey);
@@ -25,7 +27,6 @@ const els = {
   messages: document.querySelector("#messages"),
   exportIdentity: document.querySelector("#export-identity"),
   resetIdentity: document.querySelector("#reset-identity"),
-  refreshMessages: document.querySelector("#refresh-messages"),
   messageForm: document.querySelector("#message-form"),
   messageText: document.querySelector("#message-text"),
   clientTemplate: document.querySelector("#client-template"),
@@ -153,6 +154,7 @@ async function exportIdentity() {
 
 function resetIdentity() {
   localStorage.removeItem(storeKey);
+  localStorage.removeItem(selectedKey);
   location.replace("/setup.html");
 }
 
@@ -222,7 +224,69 @@ async function apiJson(response) {
 
 async function loadClients() {
   state.clients = await apiJson(await signedFetch("/clients"));
+  const selectedId = state.selected?.id || localStorage.getItem(selectedKey);
+  if (selectedId) {
+    state.selected = state.clients.find((client) => client.id === selectedId) || null;
+    if (!state.selected) {
+      localStorage.removeItem(selectedKey);
+      els.chatTitle.textContent = "Select a client";
+      els.messages.replaceChildren();
+    }
+  }
+  if (state.selected) {
+    els.chatTitle.textContent = state.selected.display_name;
+  }
   renderClients();
+}
+
+async function refresh() {
+  if (state.refreshing) {
+    return;
+  }
+  state.refreshing = true;
+  try {
+    await loadClients();
+    if (state.selected) {
+      await loadMessages();
+    }
+  } finally {
+    state.refreshing = false;
+  }
+}
+
+async function handleEvent(eventName) {
+  if (eventName === "clients") {
+    await refresh();
+  }
+  if (eventName === "messages" && state.selected) {
+    await loadMessages();
+  }
+}
+
+async function connectEvents() {
+  try {
+    const response = await signedFetch("/events");
+    if (!response.ok || !response.body) {
+      throw new Error("event stream unavailable");
+    }
+    let buffer = "";
+    for await (const chunk of response.body) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop();
+      for (const frame of frames) {
+        const line = frame.split("\n").find((item) => item.startsWith("event: "));
+        if (line) {
+          await handleEvent(line.slice(7));
+        }
+      }
+    }
+  } catch (error) {
+    status(error.message, true);
+  }
+  setTimeout(() => {
+    connectEvents();
+  }, 2000);
 }
 
 async function encryptFor(recipient, text) {
@@ -301,6 +365,10 @@ async function sendMessage(event) {
 }
 
 async function loadMessages() {
+  if (!state.selected) {
+    els.messages.replaceChildren();
+    return;
+  }
   const messages = await apiJson(await signedFetch("/messages?limit=100"));
   els.messages.replaceChildren();
   for (const message of messages) {
@@ -336,6 +404,7 @@ function renderClients() {
     node.querySelector(".client-id").textContent = isSelf ? `${client.id} - you` : client.id;
     node.addEventListener("click", async () => {
       state.selected = client;
+      localStorage.setItem(selectedKey, client.id);
       els.chatTitle.textContent = client.display_name;
       renderClients();
       await loadMessages();
@@ -345,10 +414,7 @@ function renderClients() {
 }
 
 els.refreshClients.addEventListener("click", () => {
-  loadClients().catch((error) => status(error.message, true));
-});
-els.refreshMessages.addEventListener("click", () => {
-  loadMessages().catch((error) => status(error.message, true));
+  refresh().catch((error) => status(error.message, true));
 });
 els.openSettings.addEventListener("click", openSettings);
 els.closeSettings.addEventListener("click", closeSettings);
@@ -367,4 +433,5 @@ els.messageForm.addEventListener("submit", (event) => {
 
 if (savedIdentity) {
   loadIdentity();
+  connectEvents();
 }

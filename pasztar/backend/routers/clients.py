@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from pasztar.backend.core.auth import require_client
 from pasztar.backend.core.db.models import Client, now
 from pasztar.backend.core.db.session import get_db
+from pasztar.backend.core.events import events
 from pasztar.backend.core.settings import settings
 from pasztar.backend.core.signing import fingerprint
 from pasztar.backend.core.tokens import issue_identity_token
@@ -39,6 +40,7 @@ def register_client(payload: ClientCreate, db: Session = Depends(get_db)) -> Cli
     db.add(client)
     db.commit()
     db.refresh(client)
+    events.publish("clients")
     return ClientRegisterOut(
         id=client.id,
         display_name=client.display_name,
@@ -68,6 +70,7 @@ def update_client(
     client.last_seen = now()
     db.commit()
     db.refresh(client)
+    events.publish("clients")
     return client
 
 
@@ -87,4 +90,5 @@ def heartbeat(
     client.last_seen = now()
     db.commit()
     db.refresh(client)
+    events.publish("clients")
     return HeartbeatOut(last_seen=client.last_seen)

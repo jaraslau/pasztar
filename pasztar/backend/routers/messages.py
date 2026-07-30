@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from pasztar.backend.core.auth import require_client
 from pasztar.backend.core.db.models import Client, Message, now
 from pasztar.backend.core.db.session import get_db
+from pasztar.backend.core.events import events
 from pasztar.backend.schemas.messages import MessageCreate, MessageOut
 
 router = APIRouter()
@@ -36,6 +37,7 @@ def create_message(
         raise HTTPException(status.HTTP_409_CONFLICT, "message id already exists") from exc
 
     db.refresh(message)
+    events.publish("messages")
     return message
 
 
@@ -66,6 +68,7 @@ def mark_delivered(
     message.delivered_at = message.delivered_at or now()
     db.commit()
     db.refresh(message)
+    events.publish("messages")
     return message
 
 
@@ -81,4 +84,5 @@ def mark_read(
     message.read_at = message.read_at or now()
     db.commit()
     db.refresh(message)
+    events.publish("messages")
     return message

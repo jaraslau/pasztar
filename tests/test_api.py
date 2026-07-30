@@ -18,6 +18,7 @@ from pasztar.backend.core.db.models import Base
 from pasztar.backend.core.db.session import get_db
 from pasztar.backend.core.signing import signature_payload
 from pasztar.backend.core.tokens import issue_identity_token
+from pasztar.backend.routers import clients as clients_router
 
 
 engine = create_engine(
@@ -87,6 +88,26 @@ def test_register_assigns_identity_token():
         "alice",
         "test-secret",
     )
+
+
+def test_register_and_message_publish_events(monkeypatch: pytest.MonkeyPatch):
+    published = []
+    monkeypatch.setattr(clients_router.events, "publish", published.append)
+
+    alice_private, alice_public = keypair()
+    _, bob_public = keypair()
+    register_client("alice", "Alice", alice_public)
+    register_client("bob", "Bob", bob_public)
+
+    body = b'{"id":"m1","recipient_id":"bob","ciphertext":"opaque"}'
+    response = client.post(
+        "/messages",
+        content=body,
+        headers=signed("POST", "/messages", body, "alice", alice_private),
+    )
+
+    assert response.status_code == 201
+    assert published == ["clients", "clients", "messages"]
 
 
 def signed(
