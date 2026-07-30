@@ -1,5 +1,6 @@
 const storeKey = "pasztar.identity";
 const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
 const els = {
   identityForm: document.querySelector("#identity-form"),
@@ -15,6 +16,32 @@ if (localStorage.getItem(storeKey)) {
 
 function b64(bytes) {
   return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+}
+
+function bytes(value) {
+  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+}
+
+async function bundleKey(passphrase, salt, usages) {
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"],
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 250000,
+      hash: "SHA-256",
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    usages,
+  );
 }
 
 async function fingerprint(publicKey) {
@@ -50,6 +77,27 @@ function saveBundle(bundle) {
   }
   localStorage.setItem(storeKey, JSON.stringify(bundle));
   location.replace("/");
+}
+
+async function decryptBundle(bundle) {
+  if (bundle?.type !== "pasztar.identity.encrypted") {
+    return bundle;
+  }
+  const passphrase = prompt("Identity bundle passphrase");
+  if (!passphrase) {
+    throw new Error("Passphrase is required.");
+  }
+  try {
+    const key = await bundleKey(passphrase, bytes(bundle.salt), ["decrypt"]);
+    const plaintext = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: bytes(bundle.iv) },
+      key,
+      bytes(bundle.data),
+    );
+    return JSON.parse(decoder.decode(plaintext));
+  } catch (error) {
+    throw new Error("Invalid bundle or passphrase.");
+  }
 }
 
 function assertCrypto() {
@@ -134,7 +182,7 @@ els.identityImport.addEventListener("change", async () => {
     if (!file) {
       return;
     }
-    saveBundle(JSON.parse(await file.text()));
+    saveBundle(await decryptBundle(JSON.parse(await file.text())));
   } catch (error) {
     els.identityImport.value = "";
     status(error.message, true);

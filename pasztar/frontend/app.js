@@ -34,6 +34,28 @@ function bytes(value) {
   return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 }
 
+async function bundleKey(passphrase, salt, usages) {
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(passphrase),
+    "PBKDF2",
+    false,
+    ["deriveKey"],
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 250000,
+      hash: "SHA-256",
+    },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    usages,
+  );
+}
+
 async function sha256Hex(data) {
   const hash = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(hash)]
@@ -88,14 +110,36 @@ function saveIdentity(identity) {
   status(`Loaded ${identity.clientId} (${identity.fingerprint.slice(0, 12)})`);
 }
 
-function exportIdentity() {
-  const blob = new Blob([JSON.stringify(state.identity, null, 2)], {
+async function exportIdentity() {
+  const passphrase = prompt("Identity bundle passphrase");
+  if (!passphrase) {
+    return;
+  }
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await bundleKey(passphrase, salt, ["encrypt"]);
+  const data = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoder.encode(JSON.stringify(state.identity)),
+  );
+  const bundle = {
+    v: 1,
+    type: "pasztar.identity.encrypted",
+    alg: "AES-GCM",
+    kdf: "PBKDF2-SHA256",
+    iterations: 250000,
+    salt: b64(salt),
+    iv: b64(iv),
+    data: b64(data),
+  };
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `pasztar-${state.identity.clientId}-identity.json`;
+  link.download = `pasztar-${state.identity.clientId}-identity.encrypted.json`;
   link.click();
   URL.revokeObjectURL(url);
   status("Identity bundle exported.");
@@ -287,7 +331,9 @@ els.refreshClients.addEventListener("click", () => {
 els.refreshMessages.addEventListener("click", () => {
   loadMessages().catch((error) => status(error.message, true));
 });
-els.exportIdentity.addEventListener("click", exportIdentity);
+els.exportIdentity.addEventListener("click", () => {
+  exportIdentity().catch((error) => status(error.message, true));
+});
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));
 });
