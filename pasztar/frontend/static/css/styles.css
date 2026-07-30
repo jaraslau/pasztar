@@ -231,8 +231,10 @@ label {
 
 .client {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   position: relative;
   width: 100%;
+  min-width: 0;
   min-height: 54px;
   justify-items: start;
   border: 1px solid var(--line);
@@ -256,12 +258,20 @@ label {
 }
 
 .client-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 650;
 }
 
 .client-id,
 .eyebrow,
 .meta {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted);
   font-size: 12px;
 }
@@ -303,11 +313,14 @@ label {
 }
 
 .message {
-  max-width: 72ch;
+  width: fit-content;
+  max-width: min(72ch, 100%);
+  min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   padding: 10px 12px;
+  overflow-wrap: anywhere;
 }
 
 .message.own {
@@ -318,6 +331,7 @@ label {
 .message-text {
   margin-top: 4px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .composer {
