@@ -9,25 +9,6 @@
   <body>
     <main class="shell">
       <aside class="sidebar">
-        <section class="panel identity">
-          <h1>Pasztar</h1>
-          <form id="identity-form" class="stack">
-            <label>
-              Client ID
-              <input id="client-id" name="client-id" autocomplete="username" required />
-            </label>
-            <label>
-              Display name
-              <input id="display-name" name="display-name" autocomplete="name" required />
-            </label>
-            <div class="actions">
-              <button id="register" type="submit">Register</button>
-              <button id="new-identity" type="button" class="secondary">Reset</button>
-            </div>
-          </form>
-          <p id="identity-status" class="status"></p>
-        </section>
-
         <section class="panel clients-panel">
           <div class="section-head">
             <h2>Clients</h2>
@@ -35,6 +16,7 @@
               Refresh
             </button>
           </div>
+          <p id="app-status" class="status"></p>
           <div id="clients" class="clients"></div>
         </section>
       </aside>
@@ -45,7 +27,10 @@
             <p class="eyebrow">Direct messages</p>
             <h2 id="chat-title">Select a client</h2>
           </div>
-          <button id="refresh-messages" type="button" class="secondary">Fetch</button>
+          <div class="actions">
+            <button id="export-identity" type="button" class="secondary">Export</button>
+            <button id="refresh-messages" type="button" class="secondary">Fetch</button>
+          </div>
         </header>
 
         <div id="messages" class="messages"></div>

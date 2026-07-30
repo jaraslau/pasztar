@@ -8,17 +8,18 @@ const state = {
   selected: null,
 };
 
+const savedIdentity = localStorage.getItem(storeKey);
+if (!savedIdentity) {
+  location.replace("/setup.html");
+}
+
 const els = {
-  identityForm: document.querySelector("#identity-form"),
-  clientId: document.querySelector("#client-id"),
-  displayName: document.querySelector("#display-name"),
-  register: document.querySelector("#register"),
-  newIdentity: document.querySelector("#new-identity"),
-  identityStatus: document.querySelector("#identity-status"),
+  appStatus: document.querySelector("#app-status"),
   clients: document.querySelector("#clients"),
   refreshClients: document.querySelector("#refresh-clients"),
   chatTitle: document.querySelector("#chat-title"),
   messages: document.querySelector("#messages"),
+  exportIdentity: document.querySelector("#export-identity"),
   refreshMessages: document.querySelector("#refresh-messages"),
   messageForm: document.querySelector("#message-form"),
   messageText: document.querySelector("#message-text"),
@@ -48,44 +49,8 @@ async function fingerprint(publicKey) {
 }
 
 function status(text, error = false) {
-  els.identityStatus.textContent = text;
-  els.identityStatus.classList.toggle("error", error);
-}
-
-function assertCrypto() {
-  if (!globalThis.crypto?.subtle) {
-    throw new Error("WebCrypto is unavailable. Use localhost or a secure origin.");
-  }
-}
-
-async function generateIdentity(clientId, displayName) {
-  assertCrypto();
-  const signing = await crypto.subtle.generateKey(
-    "Ed25519",
-    true,
-    ["sign", "verify"],
-  );
-  const encryption = await crypto.subtle.generateKey(
-    { name: "ECDH", namedCurve: "P-256" },
-    true,
-    ["deriveKey"],
-  );
-  const publicKey = b64(await crypto.subtle.exportKey("raw", signing.publicKey));
-  const encryptionPublicKey = b64(
-    await crypto.subtle.exportKey("spki", encryption.publicKey),
-  );
-
-  return {
-    clientId,
-    displayName,
-    publicKey,
-    encryptionPublicKey,
-    signingPrivateKey: b64(await crypto.subtle.exportKey("pkcs8", signing.privateKey)),
-    encryptionPrivateKey: b64(
-      await crypto.subtle.exportKey("pkcs8", encryption.privateKey),
-    ),
-    fingerprint: await fingerprint(publicKey),
-  };
+  els.appStatus.textContent = text;
+  els.appStatus.classList.toggle("error", error);
 }
 
 async function signingPrivateKey() {
@@ -120,38 +85,30 @@ async function encryptionPublicKey(value) {
 
 function saveIdentity(identity) {
   state.identity = identity;
-  localStorage.setItem(storeKey, JSON.stringify(identity));
-  els.clientId.value = identity.clientId;
-  els.displayName.value = identity.displayName;
-  els.clientId.disabled = true;
-  els.displayName.disabled = true;
-  els.register.disabled = true;
   status(`Loaded ${identity.clientId} (${identity.fingerprint.slice(0, 12)})`);
 }
 
-function loadIdentity() {
-  const raw = localStorage.getItem(storeKey);
-  if (!raw) {
-    return;
-  }
-  saveIdentity(JSON.parse(raw));
-  loadClients().catch((error) => status(error.message, true));
+function exportIdentity() {
+  const blob = new Blob([JSON.stringify(state.identity, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `pasztar-${state.identity.clientId}-identity.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  status("Identity bundle exported.");
 }
 
-function resetIdentity() {
-  state.identity = null;
-  state.clients = [];
-  state.selected = null;
-  localStorage.removeItem(storeKey);
-  els.clientId.disabled = false;
-  els.displayName.disabled = false;
-  els.register.disabled = false;
-  els.clientId.value = "";
-  els.displayName.value = "";
-  els.clients.replaceChildren();
-  els.messages.replaceChildren();
-  els.chatTitle.textContent = "Select a client";
-  status("");
+function loadIdentity() {
+  try {
+    saveIdentity(JSON.parse(savedIdentity));
+    loadClients().catch((error) => status(error.message, true));
+  } catch {
+    localStorage.removeItem(storeKey);
+    location.replace("/setup.html");
+  }
 }
 
 async function signedFetch(path, options = {}) {
@@ -198,24 +155,6 @@ async function apiJson(response) {
     throw new Error(data?.detail || response.statusText);
   }
   return data;
-}
-
-async function register(identity) {
-  const payload = {
-    id: identity.clientId,
-    display_name: identity.displayName,
-    public_key: identity.publicKey,
-    encryption_public_key: identity.encryptionPublicKey,
-  };
-  const response = await fetch("/api/clients", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (response.status === 409) {
-    throw new Error("Client ID already exists.");
-  }
-  return apiJson(response);
 }
 
 async function loadClients() {
@@ -342,34 +281,17 @@ function renderClients() {
   }
 }
 
-els.identityForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const clientId = els.clientId.value.trim();
-    const displayName = els.displayName.value.trim();
-    const identity = await generateIdentity(clientId, displayName);
-    const registered = await register(identity);
-    identity.identityToken = registered.identity_token;
-    saveIdentity(identity);
-    await loadClients();
-    status("Registered.");
-  } catch (error) {
-    status(error.message, true);
-  }
-});
-
-els.newIdentity.addEventListener("click", async () => {
-  resetIdentity();
-});
-
 els.refreshClients.addEventListener("click", () => {
   loadClients().catch((error) => status(error.message, true));
 });
 els.refreshMessages.addEventListener("click", () => {
   loadMessages().catch((error) => status(error.message, true));
 });
+els.exportIdentity.addEventListener("click", exportIdentity);
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));
 });
 
-loadIdentity();
+if (savedIdentity) {
+  loadIdentity();
+}

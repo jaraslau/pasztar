@@ -74,6 +74,30 @@ textarea {
   resize: vertical;
 }
 
+.setup-page {
+  min-height: 100vh;
+}
+
+.setup-screen {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.setup-panel {
+  width: min(100%, 360px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 22px;
+}
+
+.splitter {
+  height: 1px;
+  background: var(--line);
+}
+
 .shell {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
