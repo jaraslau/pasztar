@@ -6,8 +6,10 @@ const decoder = new TextDecoder();
 const state = {
   identity: null,
   clients: [],
+  messages: [],
   selected: null,
   refreshing: false,
+  marking: new Set(),
 };
 
 const savedIdentity = localStorage.getItem(storeKey);
@@ -169,7 +171,7 @@ function closeSettings() {
 function loadIdentity() {
   try {
     saveIdentity(JSON.parse(savedIdentity));
-    loadClients().catch((error) => status(error.message, true));
+    refresh().catch((error) => status(error.message, true));
   } catch {
     localStorage.removeItem(storeKey);
     location.replace("/setup.html");
@@ -239,6 +241,73 @@ async function loadClients() {
   renderClients();
 }
 
+function isIncoming(message) {
+  return message.recipient_id === state.identity.clientId;
+}
+
+function peerId(message) {
+  return message.sender_id === state.identity.clientId
+    ? message.recipient_id
+    : message.sender_id;
+}
+
+function messageState(message) {
+  if (message.read_at) {
+    return "read";
+  }
+  if (message.delivered_at) {
+    return "delivered";
+  }
+  return "sent";
+}
+
+function unreadCount(clientId) {
+  return state.messages.filter(
+    (message) =>
+      isIncoming(message) && message.sender_id === clientId && !message.read_at,
+  ).length;
+}
+
+async function markMessage(message, stateName) {
+  const key = `${stateName}:${message.id}`;
+  if (state.marking.has(key)) {
+    return;
+  }
+  state.marking.add(key);
+  try {
+    const updated = await apiJson(
+      await signedFetch(
+        `/messages/${encodeURIComponent(message.id)}/${stateName}`,
+        { method: "POST" },
+      ),
+    );
+    message.delivered_at = updated.delivered_at || message.delivered_at;
+    message.read_at = updated.read_at || message.read_at;
+  } finally {
+    state.marking.delete(key);
+  }
+}
+
+async function syncMessageState() {
+  const tasks = [];
+  for (const message of state.messages) {
+    if (!isIncoming(message)) {
+      continue;
+    }
+    tasks.push(
+      (async () => {
+        if (!message.delivered_at) {
+          await markMessage(message, "delivered");
+        }
+        if (state.selected?.id === message.sender_id && !message.read_at) {
+          await markMessage(message, "read");
+        }
+      })(),
+    );
+  }
+  await Promise.allSettled(tasks);
+}
+
 async function refresh() {
   if (state.refreshing) {
     return;
@@ -246,9 +315,7 @@ async function refresh() {
   state.refreshing = true;
   try {
     await loadClients();
-    if (state.selected) {
-      await loadMessages();
-    }
+    await loadMessages();
   } finally {
     state.refreshing = false;
   }
@@ -258,7 +325,7 @@ async function handleEvent(eventName) {
   if (eventName === "clients") {
     await refresh();
   }
-  if (eventName === "messages" && state.selected) {
+  if (eventName === "messages") {
     await loadMessages();
   }
 }
@@ -365,18 +432,15 @@ async function sendMessage(event) {
 }
 
 async function loadMessages() {
+  state.messages = await apiJson(await signedFetch("/messages?limit=100"));
+  await syncMessageState();
+  els.messages.replaceChildren();
+  renderClients();
   if (!state.selected) {
-    els.messages.replaceChildren();
     return;
   }
-  const messages = await apiJson(await signedFetch("/messages?limit=100"));
-  els.messages.replaceChildren();
-  for (const message of messages) {
-    if (
-      state.selected &&
-      message.sender_id !== state.selected.id &&
-      message.recipient_id !== state.selected.id
-    ) {
+  for (const message of state.messages) {
+    if (state.selected && peerId(message) !== state.selected.id) {
       continue;
     }
     const item = document.createElement("article");
@@ -384,7 +448,10 @@ async function loadMessages() {
       message.sender_id === state.identity.clientId ? "message own" : "message";
     const meta = document.createElement("p");
     meta.className = "meta";
-    meta.textContent = `${message.sender_id} -> ${message.recipient_id}`;
+    meta.textContent =
+      message.sender_id === state.identity.clientId
+        ? `to ${message.recipient_id} - ${messageState(message)}`
+        : `from ${message.sender_id}`;
     const text = document.createElement("p");
     text.className = "message-text";
     text.textContent = await decryptMessage(message);
@@ -401,7 +468,14 @@ function renderClients() {
     node.classList.toggle("active", state.selected?.id === client.id);
     node.classList.toggle("self", isSelf);
     node.querySelector(".client-name").textContent = client.display_name;
+    const count = unreadCount(client.id);
     node.querySelector(".client-id").textContent = isSelf ? `${client.id} - you` : client.id;
+    if (count > 0) {
+      const badge = document.createElement("span");
+      badge.className = "unread";
+      badge.textContent = String(count);
+      node.append(badge);
+    }
     node.addEventListener("click", async () => {
       state.selected = client;
       localStorage.setItem(selectedKey, client.id);

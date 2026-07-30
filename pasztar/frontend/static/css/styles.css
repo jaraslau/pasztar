@@ -231,13 +231,14 @@ label {
 
 .client {
   display: grid;
+  position: relative;
   width: 100%;
   min-height: 54px;
   justify-items: start;
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--text);
-  padding: 8px 10px;
+  padding: 8px 42px 8px 10px;
 }
 
 .client.active {
@@ -263,6 +264,20 @@ label {
 .meta {
   color: var(--muted);
   font-size: 12px;
+}
+
+.unread {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  min-width: 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
 }
 
 .chat {
