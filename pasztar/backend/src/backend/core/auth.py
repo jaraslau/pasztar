@@ -8,11 +8,11 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from pasztar.backend.core.db.models import Client, Nonce, now
-from pasztar.backend.core.db.session import get_db
-from pasztar.backend.core.settings import settings
-from pasztar.backend.core.signing import signature_payload
-from pasztar.backend.core.tokens import valid_identity_token
+from backend.core.db.models import Client, Nonce, now
+from backend.core.db.session import get_db
+from backend.core.settings import settings
+from backend.core.signing import signature_payload
+from backend.core.tokens import valid_identity_token
 
 
 async def require_client(

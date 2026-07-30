@@ -3,8 +3,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from pasztar.backend.core.db.models import Base
-from pasztar.backend.core.settings import settings
+from backend.core.db.models import Base
+from backend.core.settings import settings
 
 config = context.config
 

@@ -7,7 +7,7 @@ os.environ.setdefault("REGISTRATION_TOKEN_SECRET", "test-secret")
 import pytest
 from pydantic import ValidationError
 
-from pasztar.backend.core.settings import Settings
+from backend.core.settings import Settings
 
 
 def test_settings_loads_env_file(

@@ -13,12 +13,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from pasztar.backend.app import app
-from pasztar.backend.core.db.models import Base
-from pasztar.backend.core.db.session import get_db
-from pasztar.backend.core.signing import signature_payload
-from pasztar.backend.core.tokens import issue_identity_token
-from pasztar.backend.routers import clients as clients_router
+from backend.app import app
+from backend.core.db.models import Base
+from backend.core.db.session import get_db
+from backend.core.signing import signature_payload
+from backend.core.tokens import issue_identity_token
+from backend.routers import clients as clients_router
 
 
 engine = create_engine(

@@ -5,8 +5,8 @@ from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from pasztar.backend.core.settings import settings
-from pasztar.backend.routers import clients, events, health, messages
+from backend.core.settings import settings
+from backend.routers import clients, events, health, messages
 
 
 @asynccontextmanager

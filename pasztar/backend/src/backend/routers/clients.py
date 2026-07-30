@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from pasztar.backend.core.auth import require_client
-from pasztar.backend.core.db.models import Client, now
-from pasztar.backend.core.db.session import get_db
-from pasztar.backend.core.events import events
-from pasztar.backend.core.settings import settings
-from pasztar.backend.core.signing import fingerprint
-from pasztar.backend.core.tokens import issue_identity_token
-from pasztar.backend.schemas.clients import (
+from backend.core.auth import require_client
+from backend.core.db.models import Client, now
+from backend.core.db.session import get_db
+from backend.core.events import events
+from backend.core.settings import settings
+from backend.core.signing import fingerprint
+from backend.core.tokens import issue_identity_token
+from backend.schemas.clients import (
     ClientCreate,
     ClientOut,
     ClientRegisterOut,

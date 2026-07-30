@@ -4,9 +4,9 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
-from pasztar.backend.core.auth import require_client
-from pasztar.backend.core.db.models import Client
-from pasztar.backend.core.events import events
+from backend.core.auth import require_client
+from backend.core.db.models import Client
+from backend.core.events import events
 
 router = APIRouter()
 
