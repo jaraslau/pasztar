@@ -12,7 +12,6 @@ from backend.core.db.models import Client, Nonce, now
 from backend.core.db.session import get_db
 from backend.core.settings import settings
 from backend.core.signing import signature_payload
-from backend.core.tokens import valid_identity_token
 
 
 async def require_client(
@@ -22,18 +21,10 @@ async def require_client(
     timestamp: str = Header(alias="X-Timestamp"),
     nonce: str = Header(alias="X-Nonce"),
     signature: str = Header(alias="X-Signature"),
-    identity_token: str = Header(alias="X-Identity-Token"),
 ) -> Client:
     client = db.get(Client, client_id)
     if client is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "unknown client")
-
-    if not valid_identity_token(
-        identity_token,
-        client.id,
-        settings.registration_token_secret,
-    ):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad identity token")
 
     try:
         sent_at = datetime.fromisoformat(timestamp)

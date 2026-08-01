@@ -1,4 +1,5 @@
 const storeKey = "pasztar.identity";
+const pendingKey = "pasztar.pendingIdentity";
 const selectedKey = "pasztar.selectedClient";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -156,6 +157,7 @@ async function exportIdentity() {
 
 function resetIdentity() {
   localStorage.removeItem(storeKey);
+  localStorage.removeItem(pendingKey);
   localStorage.removeItem(selectedKey);
   location.replace("/setup.html");
 }
@@ -210,7 +212,6 @@ async function signedFetch(path, options = {}) {
       "X-Timestamp": timestamp,
       "X-Nonce": nonce,
       "X-Signature": b64(signature),
-      "X-Identity-Token": state.identity.identityToken,
       ...(options.headers || {}),
     },
   });

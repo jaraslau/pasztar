@@ -1,18 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.core.auth import require_client
 from backend.core.db.models import Client, now
 from backend.core.db.session import get_db
 from backend.core.events import events
-from backend.core.settings import settings
 from backend.core.signing import fingerprint
-from backend.core.tokens import issue_identity_token
 from backend.schemas.clients import (
     ClientCreate,
     ClientOut,
-    ClientRegisterOut,
     ClientUpdate,
     HeartbeatOut,
 )
@@ -20,14 +18,37 @@ from backend.schemas.clients import (
 router = APIRouter()
 
 
+def same_registration(client: Client, payload: ClientCreate) -> bool:
+    return (
+        client.display_name == payload.display_name
+        and client.public_key == payload.public_key
+        and client.encryption_public_key == payload.encryption_public_key
+    )
+
+
+def existing_registration(
+    client: Client | None,
+    payload: ClientCreate,
+    response: Response,
+) -> Client:
+    if client is not None and same_registration(client, payload):
+        response.status_code = status.HTTP_200_OK
+        return client
+    raise HTTPException(status.HTTP_409_CONFLICT, "client already exists")
+
+
 @router.post(
     "/clients",
-    response_model=ClientRegisterOut,
+    response_model=ClientOut,
     status_code=status.HTTP_201_CREATED,
 )
-def register_client(payload: ClientCreate, db: Session = Depends(get_db)) -> ClientRegisterOut:
-    if db.get(Client, payload.id) is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "client already exists")
+def register_client(
+    payload: ClientCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> Client:
+    if existing := db.get(Client, payload.id):
+        return existing_registration(existing, payload, response)
 
     client = Client(
         id=payload.id,
@@ -38,21 +59,14 @@ def register_client(payload: ClientCreate, db: Session = Depends(get_db)) -> Cli
         last_seen=now(),
     )
     db.add(client)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return existing_registration(db.get(Client, payload.id), payload, response)
     db.refresh(client)
     events.publish("clients")
-    return ClientRegisterOut(
-        id=client.id,
-        display_name=client.display_name,
-        public_key=client.public_key,
-        encryption_public_key=client.encryption_public_key,
-        fingerprint=client.fingerprint,
-        last_seen=client.last_seen,
-        identity_token=issue_identity_token(
-            client.id,
-            settings.registration_token_secret,
-        ),
-    )
+    return client
 
 
 @router.patch("/clients/me", response_model=ClientOut)

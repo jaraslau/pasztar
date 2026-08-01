@@ -1,4 +1,5 @@
 const storeKey = "pasztar.identity";
+const pendingKey = "pasztar.pendingIdentity";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -71,12 +72,24 @@ function saveBundle(bundle) {
     "signingPrivateKey",
     "encryptionPrivateKey",
     "fingerprint",
-    "identityToken",
   ]) {
     requireString(bundle, key);
   }
+  localStorage.removeItem(pendingKey);
   localStorage.setItem(storeKey, JSON.stringify(bundle));
   location.replace("/");
+}
+
+function loadPendingIdentity(clientId, displayName) {
+  try {
+    const identity = JSON.parse(localStorage.getItem(pendingKey));
+    if (identity?.clientId === clientId && identity?.displayName === displayName) {
+      return identity;
+    }
+  } catch {
+    localStorage.removeItem(pendingKey);
+  }
+  return null;
 }
 
 async function decryptBundle(bundle) {
@@ -164,12 +177,13 @@ async function register(identity) {
 els.identityForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    const identity = await generateIdentity(
-      els.clientId.value.trim(),
-      els.displayName.value.trim(),
-    );
-    const registered = await register(identity);
-    identity.identityToken = registered.identity_token;
+    const clientId = els.clientId.value.trim();
+    const displayName = els.displayName.value.trim();
+    const identity =
+      loadPendingIdentity(clientId, displayName) ||
+      (await generateIdentity(clientId, displayName));
+    localStorage.setItem(pendingKey, JSON.stringify(identity));
+    await register(identity);
     saveBundle(identity);
   } catch (error) {
     status(error.message, true);

@@ -28,9 +28,5 @@ class ClientOut(BaseModel):
     last_seen: datetime
 
 
-class ClientRegisterOut(ClientOut):
-    identity_token: str
-
-
 class HeartbeatOut(BaseModel):
     last_seen: datetime

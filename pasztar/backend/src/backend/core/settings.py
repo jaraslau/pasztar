@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     signature_max_skew_seconds: int = 300
-    registration_token_secret: str
 
 
 settings = Settings()

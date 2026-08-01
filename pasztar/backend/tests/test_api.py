@@ -4,7 +4,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 os.environ["DATABASE_URL"] = "sqlite://"
-os.environ["REGISTRATION_TOKEN_SECRET"] = "test-secret"
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -17,7 +16,6 @@ from backend.app import app
 from backend.core.db.models import Base
 from backend.core.db.session import get_db
 from backend.core.signing import signature_payload
-from backend.core.tokens import issue_identity_token
 from backend.routers import clients as clients_router
 
 
@@ -51,8 +49,14 @@ def keypair():
     return private, base64.b64encode(public).decode()
 
 
-def register_client(client_id: str, display_name: str, public_key: str) -> str:
-    _, encryption_public_key = keypair()
+def register_client(
+    client_id: str,
+    display_name: str,
+    public_key: str,
+    encryption_public_key: str | None = None,
+) -> str:
+    if encryption_public_key is None:
+        _, encryption_public_key = keypair()
     response = client.post(
         "/clients",
         json={
@@ -64,30 +68,62 @@ def register_client(client_id: str, display_name: str, public_key: str) -> str:
     )
     assert response.status_code == 201
     assert response.json()["encryption_public_key"] == encryption_public_key
-    assert response.json()["identity_token"] == issue_identity_token(
-        client_id,
-        "test-secret",
-    )
     return encryption_public_key
 
 
-def test_register_assigns_identity_token():
+def test_register_is_idempotent_for_same_identity(monkeypatch: pytest.MonkeyPatch):
+    published = []
+    monkeypatch.setattr(clients_router.events, "publish", published.append)
+
     _, alice_public = keypair()
-    response = client.post(
+    _, alice_encryption_public = keypair()
+    payload = {
+        "id": "alice",
+        "display_name": "Alice",
+        "public_key": alice_public,
+        "encryption_public_key": alice_encryption_public,
+    }
+
+    response = client.post("/clients", json=payload)
+    retry = client.post("/clients", json=payload)
+
+    assert response.status_code == 201
+    assert retry.status_code == 200
+    assert retry.json() == response.json()
+    assert "identity_token" not in response.json()
+    assert published == ["clients"]
+
+
+def test_register_rejects_same_id_with_different_identity_data():
+    _, alice_public = keypair()
+    _, alice_encryption_public = keypair()
+    first = client.post(
         "/clients",
         json={
             "id": "alice",
             "display_name": "Alice",
             "public_key": alice_public,
-            "encryption_public_key": alice_public,
+            "encryption_public_key": alice_encryption_public,
         },
     )
+    assert first.status_code == 201
 
-    assert response.status_code == 201
-    assert response.json()["identity_token"] == issue_identity_token(
-        "alice",
-        "test-secret",
-    )
+    _, other_public = keypair()
+    _, other_encryption_public = keypair()
+    changes = [
+        {"display_name": "Alicia"},
+        {"public_key": other_public},
+        {"encryption_public_key": other_encryption_public},
+    ]
+    for change in changes:
+        payload = {
+            "id": "alice",
+            "display_name": "Alice",
+            "public_key": alice_public,
+            "encryption_public_key": alice_encryption_public,
+            **change,
+        }
+        assert client.post("/clients", json=payload).status_code == 409
 
 
 def test_register_and_message_publish_events(monkeypatch: pytest.MonkeyPatch):
@@ -118,7 +154,6 @@ def signed(
     private,
     timestamp: str | None = None,
     nonce: str | None = None,
-    identity_token: str | None = None,
 ):
     timestamp = timestamp or datetime.now(UTC).isoformat()
     nonce = nonce or str(uuid.uuid4())
@@ -128,8 +163,6 @@ def signed(
         "X-Timestamp": timestamp,
         "X-Nonce": nonce,
         "X-Signature": base64.b64encode(private.sign(payload)).decode(),
-        "X-Identity-Token": identity_token
-        or issue_identity_token(client_id, "test-secret"),
     }
 
 
@@ -170,19 +203,6 @@ def test_auth_rejects_unknown_client_bad_signature_and_stale_timestamp():
     bad_headers = signed("POST", "/messages", body, "alice", alice_private)
     bad_headers["X-Signature"] = base64.b64encode(b"bad").decode()
     assert client.post("/messages", content=body, headers=bad_headers).status_code == 401
-
-    bad_token_headers = signed(
-        "POST",
-        "/messages",
-        body,
-        "alice",
-        alice_private,
-        identity_token=issue_identity_token("bob", "test-secret"),
-    )
-    assert (
-        client.post("/messages", content=body, headers=bad_token_headers).status_code
-        == 401
-    )
 
     stale_headers = signed(
         "POST",
