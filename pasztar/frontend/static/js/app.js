@@ -1,6 +1,7 @@
 const storeKey = "pasztar.identity";
 const pendingKey = "pasztar.pendingIdentity";
 const selectedKey = "pasztar.selectedClient";
+const maxRecordingMs = 60000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -11,6 +12,8 @@ const state = {
   selected: null,
   refreshing: false,
   marking: new Set(),
+  recording: null,
+  audioUrls: [],
 };
 
 const savedIdentity = localStorage.getItem(storeKey);
@@ -32,11 +35,22 @@ const els = {
   resetIdentity: document.querySelector("#reset-identity"),
   messageForm: document.querySelector("#message-form"),
   messageText: document.querySelector("#message-text"),
+  sendText: document.querySelector("#send-text"),
+  recordVoice: document.querySelector("#record-voice"),
+  voiceControls: document.querySelector("#voice-controls"),
+  voiceTimer: document.querySelector("#voice-timer"),
+  cancelVoice: document.querySelector("#cancel-voice"),
+  sendVoice: document.querySelector("#send-voice"),
   clientTemplate: document.querySelector("#client-template"),
 };
 
 function b64(bytes) {
-  return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  const data = new Uint8Array(bytes);
+  let binary = "";
+  for (let index = 0; index < data.length; index += 0x8000) {
+    binary += String.fromCharCode(...data.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
 }
 
 function bytes(value) {
@@ -357,7 +371,123 @@ async function connectEvents() {
   }, 2000);
 }
 
-async function encryptFor(recipient, text) {
+function formatDuration(ms) {
+  const seconds = Math.ceil(ms / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function updateRecordingUi() {
+  const recording = state.recording;
+  els.recordVoice.hidden = Boolean(recording);
+  els.voiceControls.hidden = !recording;
+  els.messageText.disabled = Boolean(recording);
+  els.sendText.disabled = Boolean(recording);
+  els.cancelVoice.disabled = Boolean(recording?.stopping);
+  els.sendVoice.disabled = Boolean(recording?.stopping);
+  els.voiceTimer.textContent = recording
+    ? formatDuration(Math.min(Date.now() - recording.startedAt, maxRecordingMs))
+    : "0:00";
+}
+
+function recordingMimeType() {
+  return window.MediaRecorder?.isTypeSupported?.("audio/webm;codecs=opus")
+    ? "audio/webm;codecs=opus"
+    : "";
+}
+
+async function startVoiceRecording() {
+  if (!state.selected) {
+    status("Select a recipient.", true);
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    status("Voice recording unavailable in this browser.", true);
+    return;
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = recordingMimeType();
+    const recorder = new MediaRecorder(
+      stream,
+      mimeType ? { mimeType } : undefined,
+    );
+    const recording = {
+      recorder,
+      chunks: [],
+      stream,
+      startedAt: Date.now(),
+      timer: null,
+      send: false,
+      stopping: false,
+      recipient: state.selected,
+      mimeType: mimeType || recorder.mimeType || "audio/webm",
+    };
+    state.recording = recording;
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data.size > 0) {
+        recording.chunks.push(event.data);
+      }
+    });
+    recorder.addEventListener("stop", () => {
+      finishVoiceRecording(recording).catch((error) => status(error.message, true));
+    });
+    recorder.start();
+    recording.timer = setInterval(() => {
+      updateRecordingUi();
+      if (Date.now() - recording.startedAt >= maxRecordingMs) {
+        stopVoiceRecording(true);
+      }
+    }, 250);
+    updateRecordingUi();
+    status("Recording voice message.");
+  } catch (error) {
+    stream?.getTracks().forEach((track) => track.stop());
+    status(error.message, true);
+  }
+}
+
+function stopVoiceRecording(send) {
+  const recording = state.recording;
+  if (!recording) {
+    return;
+  }
+  if (recording.stopping) {
+    return;
+  }
+  recording.stopping = true;
+  recording.send = send;
+  updateRecordingUi();
+  if (recording.recorder.state !== "inactive") {
+    recording.recorder.stop();
+  }
+}
+
+async function finishVoiceRecording(recording) {
+  clearInterval(recording.timer);
+  recording.stream.getTracks().forEach((track) => track.stop());
+  if (state.recording === recording) {
+    state.recording = null;
+    updateRecordingUi();
+  }
+  if (!recording.send) {
+    status("Voice recording canceled.");
+    return;
+  }
+  const blob = new Blob(recording.chunks, { type: recording.mimeType });
+  if (!blob.size) {
+    status("No audio captured.", true);
+    return;
+  }
+  await sendVoiceMessage(
+    blob,
+    Math.min(Date.now() - recording.startedAt, maxRecordingMs),
+    recording.recipient,
+  );
+}
+
+async function encryptFor(recipient, plaintext, metadata = {}) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await crypto.subtle.deriveKey(
     {
@@ -372,11 +502,12 @@ async function encryptFor(recipient, text) {
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
     key,
-    encoder.encode(text),
+    typeof plaintext === "string" ? encoder.encode(plaintext) : plaintext,
   );
   return JSON.stringify({
     v: 1,
     alg: "ECDH-P256+A256GCM",
+    ...metadata,
     sender_epk: state.identity.encryptionPublicKey,
     iv: b64(iv),
     data: b64(ciphertext),
@@ -384,15 +515,22 @@ async function encryptFor(recipient, text) {
 }
 
 async function decryptMessage(message) {
+  let envelope;
   try {
-    const envelope = JSON.parse(message.ciphertext);
+    envelope = JSON.parse(message.ciphertext);
     const peerKey =
       message.sender_id === state.identity.clientId
         ? state.clients.find((client) => client.id === message.recipient_id)
             ?.encryption_public_key
         : envelope.sender_epk;
     if (!peerKey || envelope.v !== 1) {
-      return "[unable to decrypt]";
+      return {
+        kind: "error",
+        text:
+          envelope.kind === "voice"
+            ? "[unable to decrypt voice message]"
+            : "[unable to decrypt]",
+      };
     }
     const key = await crypto.subtle.deriveKey(
       { name: "ECDH", public: await encryptionPublicKey(peerKey) },
@@ -406,9 +544,22 @@ async function decryptMessage(message) {
       key,
       bytes(envelope.data),
     );
-    return decoder.decode(plaintext);
+    if (envelope.kind === "voice") {
+      return {
+        kind: "voice",
+        data: plaintext,
+        mimeType: envelope.mime_type || "audio/webm",
+      };
+    }
+    return { kind: "text", text: decoder.decode(plaintext) };
   } catch {
-    return "[unable to decrypt]";
+    return {
+      kind: "error",
+      text:
+        envelope?.kind === "voice"
+          ? "[unable to decrypt voice message]"
+          : "[unable to decrypt]",
+    };
   }
 }
 
@@ -432,9 +583,51 @@ async function sendMessage(event) {
   await loadMessages();
 }
 
+async function sendVoiceMessage(blob, durationMs, recipient) {
+  const body = JSON.stringify({
+    id: crypto.randomUUID(),
+    recipient_id: recipient.id,
+    ciphertext: await encryptFor(
+      recipient,
+      new Uint8Array(await blob.arrayBuffer()),
+      {
+        kind: "voice",
+        mime_type: blob.type || "audio/webm",
+        duration_ms: Math.round(durationMs),
+      },
+    ),
+  });
+  await apiJson(await signedFetch("/messages", { method: "POST", body }));
+  status("Voice message sent.");
+  await loadMessages();
+}
+
+async function renderMessageBody(message) {
+  const payload = await decryptMessage(message);
+  if (payload.kind === "voice") {
+    const audio = document.createElement("audio");
+    const url = URL.createObjectURL(
+      new Blob([payload.data], { type: payload.mimeType }),
+    );
+    state.audioUrls.push(url);
+    audio.className = "voice-message";
+    audio.controls = true;
+    audio.preload = "metadata";
+    audio.src = url;
+    audio.setAttribute("aria-label", "Voice message");
+    return audio;
+  }
+  const text = document.createElement("p");
+  text.className = "message-text";
+  text.textContent = payload.text;
+  return text;
+}
+
 async function loadMessages() {
   state.messages = await apiJson(await signedFetch("/messages?limit=100"));
   await syncMessageState();
+  state.audioUrls.forEach((url) => URL.revokeObjectURL(url));
+  state.audioUrls = [];
   els.messages.replaceChildren();
   renderClients();
   if (!state.selected) {
@@ -453,10 +646,7 @@ async function loadMessages() {
       message.sender_id === state.identity.clientId
         ? `to ${message.recipient_id} - ${messageState(message)}`
         : `from ${message.sender_id}`;
-    const text = document.createElement("p");
-    text.className = "message-text";
-    text.textContent = await decryptMessage(message);
-    item.append(meta, text);
+    item.append(meta, await renderMessageBody(message));
     els.messages.append(item);
   }
 }
@@ -504,6 +694,15 @@ els.settingsModal.addEventListener("click", (event) => {
 });
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));
+});
+els.recordVoice.addEventListener("click", () => {
+  startVoiceRecording().catch((error) => status(error.message, true));
+});
+els.cancelVoice.addEventListener("click", () => {
+  stopVoiceRecording(false);
+});
+els.sendVoice.addEventListener("click", () => {
+  stopVoiceRecording(true);
 });
 
 if (savedIdentity) {

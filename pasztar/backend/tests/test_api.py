@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -17,6 +18,7 @@ from backend.core.db.models import Base
 from backend.core.db.session import get_db
 from backend.core.signing import signature_payload
 from backend.routers import clients as clients_router
+from backend.schemas.messages import MAX_CIPHERTEXT_LENGTH
 
 
 engine = create_engine(
@@ -186,6 +188,30 @@ def test_register_send_fetch_and_replay_rejection():
     fetched = client.get("/messages", headers=fetch_headers)
     assert fetched.status_code == 200
     assert [message["id"] for message in fetched.json()] == ["m1"]
+
+
+def test_message_rejects_oversized_ciphertext():
+    alice_private, alice_public = keypair()
+    _, bob_public = keypair()
+
+    register_client("alice", "Alice", alice_public)
+    register_client("bob", "Bob", bob_public)
+
+    body = json.dumps(
+        {
+            "id": "m1",
+            "recipient_id": "bob",
+            "ciphertext": "x" * (MAX_CIPHERTEXT_LENGTH + 1),
+        }
+    ).encode()
+
+    response = client.post(
+        "/messages",
+        content=body,
+        headers=signed("POST", "/messages", body, "alice", alice_private),
+    )
+
+    assert response.status_code == 422
 
 
 def test_auth_rejects_unknown_client_bad_signature_and_stale_timestamp():

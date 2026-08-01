@@ -22,6 +22,12 @@
         <path d="m22 2-7 20-4-9-9-4 20-7Z" />
         <path d="M22 2 11 13" />
       </symbol>
+      <symbol id="icon-mic" viewBox="0 0 24 24">
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+        <path d="M12 19v3" />
+        <path d="M8 22h8" />
+      </symbol>
       <symbol id="icon-download" viewBox="0 0 24 24">
         <path d="M12 3v12" />
         <path d="m7 10 5 5 5-5" />
@@ -64,7 +70,19 @@
 
         <form id="message-form" class="composer">
           <textarea id="message-text" rows="3" placeholder="Message" required></textarea>
-          <button type="submit" class="send-button" title="Send" aria-label="Send">
+          <button id="record-voice" type="button" class="icon-button" title="Record voice" aria-label="Record voice">
+            <svg class="icon"><use href="#icon-mic"></use></svg>
+          </button>
+          <div id="voice-controls" class="voice-controls" hidden>
+            <span id="voice-timer" class="voice-timer">0:00</span>
+            <button id="cancel-voice" type="button" class="icon-button" title="Cancel voice message" aria-label="Cancel voice message">
+              <svg class="icon"><use href="#icon-x"></use></svg>
+            </button>
+            <button id="send-voice" type="button" class="send-button" title="Send voice message" aria-label="Send voice message">
+              <svg class="icon"><use href="#icon-send"></use></svg>
+            </button>
+          </div>
+          <button id="send-text" type="submit" class="send-button" title="Send" aria-label="Send">
             <svg class="icon"><use href="#icon-send"></use></svg>
           </button>
         </form>

@@ -334,13 +334,36 @@ label {
   overflow-wrap: anywhere;
 }
 
+.voice-message {
+  display: block;
+  width: min(320px, 72vw);
+  margin-top: 6px;
+}
+
 .composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid var(--line);
   background: var(--panel);
+}
+
+.voice-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-controls[hidden] {
+  display: none;
+}
+
+.voice-timer {
+  color: var(--danger);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
 }
 
 @media (max-width: 820px) {
@@ -358,5 +381,9 @@ label {
 
   .composer {
     grid-template-columns: 1fr;
+  }
+
+  .voice-controls {
+    justify-content: end;
   }
 }
