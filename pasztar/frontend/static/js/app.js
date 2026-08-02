@@ -24,6 +24,8 @@ const state = {
   contextMenu: null,
   selectedMessageIds: new Set(),
   replyTarget: null,
+  forwardingMessages: [],
+  forwardingSending: false,
 };
 
 const savedIdentity = localStorage.getItem(storeKey);
@@ -40,6 +42,7 @@ const els = {
   settingsModal: document.querySelector("#settings-modal"),
   identitySummary: document.querySelector("#identity-summary"),
   chatTitle: document.querySelector("#chat-title"),
+  chat: document.querySelector(".chat"),
   messages: document.querySelector("#messages"),
   exportIdentity: document.querySelector("#export-identity"),
   resetIdentity: document.querySelector("#reset-identity"),
@@ -54,6 +57,10 @@ const els = {
   replyPreview: document.querySelector("#reply-preview"),
   replyPreviewText: document.querySelector("#reply-preview-text"),
   cancelReply: document.querySelector("#cancel-reply"),
+  clientsPanel: document.querySelector(".clients-panel"),
+  forwardingBar: document.querySelector("#forwarding-bar"),
+  forwardingCount: document.querySelector("#forwarding-count"),
+  cancelForwarding: document.querySelector("#cancel-forwarding"),
   selectionBar: document.querySelector("#selection-bar"),
   selectionCount: document.querySelector("#selection-count"),
   cancelSelection: document.querySelector("#cancel-selection"),
@@ -120,14 +127,18 @@ function truncateText(value, length = 92) {
   return value.length > length ? `${value.slice(0, length - 1)}...` : value;
 }
 
-function messageAuthor(message) {
-  if (message.sender_id === state.identity.clientId) {
+function displayNameForId(clientId) {
+  if (clientId === state.identity.clientId) {
     return "You";
   }
   return (
-    state.clients.find((client) => client.id === message.sender_id)
-      ?.display_name || message.sender_id
+    state.clients.find((client) => client.id === clientId)?.display_name ||
+    clientId
   );
+}
+
+function messageAuthor(message) {
+  return displayNameForId(message.sender_id);
 }
 
 async function messageSummary(message) {
@@ -173,11 +184,21 @@ function closeContextMenu() {
 
 function updateSelectionUi() {
   const count = state.selectedMessageIds.size;
-  els.messageForm.hidden = count > 0;
-  els.selectionBar.hidden = count === 0;
+  const forwarding = state.forwardingMessages.length > 0;
+  els.messageForm.hidden = count > 0 || forwarding;
+  els.selectionBar.hidden = count === 0 || forwarding;
+  els.forwardingBar.hidden = !forwarding;
   els.selectionCount.textContent = `${count} selected`;
   els.deleteSelected.disabled = count === 0;
-  els.forwardSelected.disabled = true;
+  els.forwardSelected.disabled = count === 0;
+  els.forwardingCount.textContent = forwarding
+    ? `Forwarding ${state.forwardingMessages.length} message${
+        state.forwardingMessages.length === 1 ? "" : "s"
+      } - select a recipient from the client list`
+    : "";
+  els.chat.classList.toggle("forwarding", forwarding);
+  els.clientsPanel.classList.toggle("forwarding", forwarding);
+  els.cancelForwarding.disabled = state.forwardingSending;
 }
 
 function exitSelection() {
@@ -680,6 +701,7 @@ async function decryptMessage(message) {
     if (!peerKey || envelope.v !== 1) {
       return {
         kind: "error",
+        forwardedFrom: envelope.forwarded_from || null,
         text:
           envelope.kind === "voice"
             ? "[unable to decrypt voice message]"
@@ -701,15 +723,21 @@ async function decryptMessage(message) {
     if (envelope.kind === "voice") {
       return {
         kind: "voice",
+        forwardedFrom: envelope.forwarded_from || null,
         data: plaintext,
         durationMs: Number(envelope.duration_ms) || 0,
         mimeType: envelope.mime_type || "audio/webm",
       };
     }
-    return { kind: "text", text: decoder.decode(plaintext) };
+    return {
+      kind: "text",
+      forwardedFrom: envelope.forwarded_from || null,
+      text: decoder.decode(plaintext),
+    };
   } catch {
     return {
       kind: "error",
+      forwardedFrom: envelope?.forwarded_from || null,
       text:
         envelope?.kind === "voice"
           ? "[unable to decrypt voice message]"
@@ -813,11 +841,89 @@ async function deleteSelectedMessages() {
   await loadMessages();
 }
 
+function cancelForwarding() {
+  if (state.forwardingSending) {
+    return;
+  }
+  state.forwardingMessages = [];
+  updateSelectionUi();
+  renderClients();
+}
+
+function beginForwarding(messages) {
+  if (!messages.length) {
+    return;
+  }
+  if (state.recording) {
+    stopVoiceRecording(false);
+  }
+  clearReplyTarget();
+  state.selectedMessageIds.clear();
+  state.forwardingMessages = messages;
+  updateSelectionUi();
+  renderClients();
+  renderMessagesFromState().catch((error) => status(error.message, true));
+}
+
+async function encryptForwardedMessage(message, recipient) {
+  const payload = await decryptMessage(message);
+  const forwardedFrom = payload.forwardedFrom || message.sender_id;
+  if (payload.kind === "voice") {
+    return encryptFor(recipient, new Uint8Array(payload.data), {
+      kind: "voice",
+      forwarded_from: forwardedFrom,
+      mime_type: payload.mimeType,
+      duration_ms: Math.round(payload.durationMs),
+    });
+  }
+  if (payload.kind === "text") {
+    return encryptFor(recipient, payload.text, {
+      forwarded_from: forwardedFrom,
+    });
+  }
+  throw new Error("Cannot forward a message that failed to decrypt.");
+}
+
+async function forwardMessagesTo(recipient) {
+  if (state.forwardingSending || state.forwardingMessages.length === 0) {
+    return;
+  }
+  if (recipient.id === state.identity.clientId) {
+    status("Pick another client to forward to.", true);
+    return;
+  }
+  state.forwardingSending = true;
+  updateSelectionUi();
+  try {
+    for (const message of state.forwardingMessages) {
+      const body = JSON.stringify({
+        id: crypto.randomUUID(),
+        recipient_id: recipient.id,
+        ciphertext: await encryptForwardedMessage(message, recipient),
+      });
+      await apiJson(await signedFetch("/messages", { method: "POST", body }));
+    }
+    const count = state.forwardingMessages.length;
+    state.forwardingMessages = [];
+    state.selected = recipient;
+    localStorage.setItem(selectedKey, recipient.id);
+    els.chatTitle.textContent = recipient.display_name;
+    status(`${count} message${count === 1 ? "" : "s"} forwarded.`);
+    updateSelectionUi();
+    renderClients();
+    await loadMessages({ scrollToBottom: true });
+  } finally {
+    state.forwardingSending = false;
+    updateSelectionUi();
+  }
+}
+
 function showMessageMenu(event, message) {
   event.preventDefault();
   closeContextMenu();
   const menu = document.createElement("div");
   const replyButton = document.createElement("button");
+  const forwardButton = document.createElement("button");
   const selectButton = document.createElement("button");
   const deleteButton = document.createElement("button");
   menu.className = "context-menu";
@@ -828,6 +934,14 @@ function showMessageMenu(event, message) {
   replyButton.addEventListener("click", () => {
     closeContextMenu();
     setReplyTarget(message).catch((error) => status(error.message, true));
+  });
+  forwardButton.type = "button";
+  forwardButton.className = "context-menu-item";
+  forwardButton.innerHTML =
+    '<svg class="icon"><use href="#icon-forward"></use></svg>Forward';
+  forwardButton.addEventListener("click", () => {
+    closeContextMenu();
+    beginForwarding([message]);
   });
   selectButton.type = "button";
   selectButton.className = "context-menu-item";
@@ -845,7 +959,7 @@ function showMessageMenu(event, message) {
     closeContextMenu();
     deleteMessage(message).catch((error) => status(error.message, true));
   });
-  menu.append(replyButton, selectButton, deleteButton);
+  menu.append(replyButton, forwardButton, selectButton, deleteButton);
   document.body.append(menu);
   state.contextMenu = menu;
   const rect = menu.getBoundingClientRect();
@@ -883,6 +997,17 @@ async function renderReplyQuote(replyToId) {
   }
   quote.append(label, text);
   return quote;
+}
+
+async function renderForwardedFrom(message) {
+  const payload = await decryptMessage(message);
+  if (!payload.forwardedFrom) {
+    return null;
+  }
+  const forwarded = document.createElement("p");
+  forwarded.className = "forwarded-from";
+  forwarded.textContent = `Forwarded from ${displayNameForId(payload.forwardedFrom)}`;
+  return forwarded;
 }
 
 async function renderMessageBody(message) {
@@ -1120,6 +1245,10 @@ async function renderMessagesFromState({
         ? `to ${message.recipient_id} - ${messageState(message)}`
         : `from ${message.sender_id}`;
     item.append(meta);
+    const forwardedFrom = await renderForwardedFrom(message);
+    if (forwardedFrom) {
+      item.append(forwardedFrom);
+    }
     if (message.reply_to_id) {
       item.append(await renderReplyQuote(message.reply_to_id));
     }
@@ -1140,6 +1269,11 @@ function renderClients() {
     const node = els.clientTemplate.content.firstElementChild.cloneNode(true);
     node.classList.toggle("active", state.selected?.id === client.id);
     node.classList.toggle("self", isSelf);
+    node.classList.toggle(
+      "forward-target",
+      state.forwardingMessages.length > 0,
+    );
+    node.disabled = state.forwardingMessages.length > 0 && isSelf;
     node.querySelector(".client-name").textContent = client.display_name;
     const count = unreadCount(client.id);
     node.querySelector(".client-id").textContent = isSelf
@@ -1151,15 +1285,21 @@ function renderClients() {
       badge.textContent = String(count);
       node.append(badge);
     }
-    node.addEventListener("click", async () => {
-      state.selectedMessageIds.clear();
-      updateSelectionUi();
-      clearReplyTarget();
-      state.selected = client;
-      localStorage.setItem(selectedKey, client.id);
-      els.chatTitle.textContent = client.display_name;
-      renderClients();
-      await loadMessages();
+    node.addEventListener("click", () => {
+      (async () => {
+        if (state.forwardingMessages.length > 0) {
+          await forwardMessagesTo(client);
+          return;
+        }
+        state.selectedMessageIds.clear();
+        updateSelectionUi();
+        clearReplyTarget();
+        state.selected = client;
+        localStorage.setItem(selectedKey, client.id);
+        els.chatTitle.textContent = client.display_name;
+        renderClients();
+        await loadMessages();
+      })().catch((error) => status(error.message, true));
     });
     els.clients.append(node);
   }
@@ -1183,7 +1323,9 @@ document.addEventListener("click", closeContextMenu);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeContextMenu();
-    if (state.selectedMessageIds.size > 0) {
+    if (state.forwardingMessages.length > 0) {
+      cancelForwarding();
+    } else if (state.selectedMessageIds.size > 0) {
       exitSelection();
     } else if (state.replyTarget) {
       clearReplyTarget();
@@ -1195,6 +1337,13 @@ els.cancelSelection.addEventListener("click", exitSelection);
 els.deleteSelected.addEventListener("click", () => {
   deleteSelectedMessages().catch((error) => status(error.message, true));
 });
+els.forwardSelected.addEventListener("click", () => {
+  const selectedMessages = state.messages.filter((message) =>
+    state.selectedMessageIds.has(message.id),
+  );
+  beginForwarding(selectedMessages);
+});
+els.cancelForwarding.addEventListener("click", cancelForwarding);
 els.cancelReply.addEventListener("click", clearReplyTarget);
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));
