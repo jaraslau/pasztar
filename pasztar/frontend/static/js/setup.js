@@ -1,7 +1,14 @@
+import {
+  apiJson,
+  b64,
+  bundleKey,
+  bytes,
+  decoder,
+  fingerprint,
+} from "./crypto_core.js";
+
 const storeKey = "pasztar.identity";
 const pendingKey = "pasztar.pendingIdentity";
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 
 const els = {
   identityForm: document.querySelector("#identity-form"),
@@ -13,43 +20,6 @@ const els = {
 
 if (localStorage.getItem(storeKey)) {
   location.replace("/");
-}
-
-function b64(bytes) {
-  return btoa(String.fromCharCode(...new Uint8Array(bytes)));
-}
-
-function bytes(value) {
-  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
-}
-
-async function bundleKey(passphrase, salt, usages) {
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(passphrase),
-    "PBKDF2",
-    false,
-    ["deriveKey"],
-  );
-  return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 250000,
-      hash: "SHA-256",
-    },
-    baseKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    usages,
-  );
-}
-
-async function fingerprint(publicKey) {
-  const hash = await crypto.subtle.digest("SHA-256", encoder.encode(publicKey));
-  return [...new Uint8Array(hash)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function status(text, error = false) {
@@ -83,7 +53,10 @@ function saveBundle(bundle) {
 function loadPendingIdentity(clientId, displayName) {
   try {
     const identity = JSON.parse(localStorage.getItem(pendingKey));
-    if (identity?.clientId === clientId && identity?.displayName === displayName) {
+    if (
+      identity?.clientId === clientId &&
+      identity?.displayName === displayName
+    ) {
       return identity;
     }
   } catch {
@@ -115,23 +88,26 @@ async function decryptBundle(bundle) {
 
 function assertCrypto() {
   if (!globalThis.crypto?.subtle) {
-    throw new Error("WebCrypto is unavailable. Use localhost or a secure origin.");
+    throw new Error(
+      "WebCrypto is unavailable. Use localhost or a secure origin.",
+    );
   }
 }
 
 async function generateIdentity(clientId, displayName) {
   assertCrypto();
-  const signing = await crypto.subtle.generateKey(
-    "Ed25519",
-    true,
-    ["sign", "verify"],
-  );
+  const signing = await crypto.subtle.generateKey("Ed25519", true, [
+    "sign",
+    "verify",
+  ]);
   const encryption = await crypto.subtle.generateKey(
     { name: "ECDH", namedCurve: "P-256" },
     true,
     ["deriveKey"],
   );
-  const publicKey = b64(await crypto.subtle.exportKey("raw", signing.publicKey));
+  const publicKey = b64(
+    await crypto.subtle.exportKey("raw", signing.publicKey),
+  );
   const encryptionPublicKey = b64(
     await crypto.subtle.exportKey("spki", encryption.publicKey),
   );
@@ -141,20 +117,14 @@ async function generateIdentity(clientId, displayName) {
     displayName,
     publicKey,
     encryptionPublicKey,
-    signingPrivateKey: b64(await crypto.subtle.exportKey("pkcs8", signing.privateKey)),
+    signingPrivateKey: b64(
+      await crypto.subtle.exportKey("pkcs8", signing.privateKey),
+    ),
     encryptionPrivateKey: b64(
       await crypto.subtle.exportKey("pkcs8", encryption.privateKey),
     ),
     fingerprint: await fingerprint(publicKey),
   };
-}
-
-async function apiJson(response) {
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || response.statusText);
-  }
-  return data;
 }
 
 async function register(identity) {

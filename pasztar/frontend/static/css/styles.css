@@ -205,6 +205,20 @@ textarea {
   padding: 6px;
 }
 
+.setup-logo {
+  display: block;
+  width: 88px;
+  height: 76px;
+  object-fit: contain;
+}
+
+@media (min-width: 720px) {
+  .setup-logo {
+    width: 132px;
+    height: 114px;
+  }
+}
+
 .splitter {
   height: 1px;
   margin: 4px 0;
@@ -656,6 +670,13 @@ button.icon-button.active {
 }
 
 .message {
+  --message-border-left: 0;
+  --message-border-right: 0;
+  --message-line-color: transparent;
+  --message-media-margin-left: 0;
+  --message-media-margin-right: 0;
+  --message-padding-left: 4px;
+  --message-padding-right: 4px;
   display: block;
   width: fit-content;
   max-width: min(64ch, 74%);
@@ -666,11 +687,19 @@ button.icon-button.active {
 }
 
 .message.own {
+  --message-border-right: 2px solid var(--message-line-color);
+  --message-line-color: var(--accent);
+  --message-media-margin-left: auto;
+  --message-padding-right: 18px;
   align-self: flex-end;
   text-align: right;
 }
 
 .message.incoming {
+  --message-border-left: 2px solid var(--message-line-color);
+  --message-line-color: var(--warm);
+  --message-media-margin-right: auto;
+  --message-padding-left: 18px;
   align-self: flex-start;
   text-align: left;
 }
@@ -692,18 +721,9 @@ button.icon-button.active {
 .message-content {
   min-width: 0;
   max-width: 100%;
-}
-
-.message.own .message-content {
-  max-width: 100%;
-  padding: 5px 18px 5px 4px;
-  border-right: 2px solid var(--accent);
-}
-
-.message.incoming .message-content {
-  max-width: 100%;
-  padding: 5px 4px 5px 18px;
-  border-left: 2px solid var(--warm);
+  padding: 5px var(--message-padding-right) 5px var(--message-padding-left);
+  border-left: var(--message-border-left);
+  border-right: var(--message-border-right);
 }
 
 .meta-time {
@@ -798,14 +818,7 @@ button.icon-button.active {
   background: rgb(255 255 255 / 4%);
   color: var(--text);
   padding: 6px 10px;
-}
-
-.message.own .reply-quote {
-  text-align: right;
-}
-
-.message.incoming .reply-quote {
-  text-align: left;
+  text-align: inherit;
 }
 
 .reply-quote:hover {
@@ -835,28 +848,12 @@ button.icon-button.active {
 .voice-player,
 .image-attachment,
 .file-attachment {
-  margin-left: 0;
-  margin-right: 0;
+  margin-left: var(--message-media-margin-left);
+  margin-right: var(--message-media-margin-right);
 }
 
-.message.own .voice-player,
-.message.own .image-attachment,
-.message.own .file-attachment {
-  margin-left: auto;
-}
-
-.message.incoming .voice-player,
-.message.incoming .image-attachment,
-.message.incoming .file-attachment {
-  margin-right: auto;
-}
-
-.message.own.forwarded-message .message-content {
-  border-right-color: var(--forward-line);
-}
-
-.message.incoming.forwarded-message .message-content {
-  border-left-color: var(--forward-line);
+.message.forwarded-message {
+  --message-line-color: var(--forward-line);
 }
 
 .message.forwarded-message .forwarded-from {
@@ -1170,6 +1167,9 @@ button.icon-button.active {
 }
 
 .attachment-menu .icon-button {
+  --delay: 0s;
+  --x: 0;
+  --y: 0;
   position: absolute;
   bottom: 0;
   right: 0;
@@ -1181,18 +1181,24 @@ button.icon-button.active {
     transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
     opacity 0.18s ease,
     background 0.15s ease;
+  transition-delay: var(--delay);
 }
 
 .attachment-menu #record-voice {
-  transition-delay: 0s;
+  --x: -4px;
+  --y: -54px;
 }
 
 .attachment-menu #pick-image {
-  transition-delay: 0.03s;
+  --delay: 0.03s;
+  --x: -40px;
+  --y: -40px;
 }
 
 .attachment-menu #pick-file {
-  transition-delay: 0.06s;
+  --delay: 0.06s;
+  --x: -58px;
+  --y: -4px;
 }
 
 #attachment-menu[hidden] {
@@ -1203,19 +1209,9 @@ button.icon-button.active {
   pointer-events: auto;
 }
 
-.composer.attachments-open .attachment-menu #record-voice {
+.composer.attachments-open .attachment-menu .icon-button {
   opacity: 1;
-  transform: translate(-4px, -54px) scale(1);
-}
-
-.composer.attachments-open .attachment-menu #pick-image {
-  opacity: 1;
-  transform: translate(-40px, -40px) scale(1);
-}
-
-.composer.attachments-open .attachment-menu #pick-file {
-  opacity: 1;
-  transform: translate(-58px, -4px) scale(1);
+  transform: translate(var(--x), var(--y)) scale(1);
 }
 
 .attachment-menu .icon-button:hover {
@@ -1224,28 +1220,12 @@ button.icon-button.active {
   z-index: 5;
 }
 
-.composer.attachments-open .attachment-menu #record-voice:hover {
-  transform: translate(-4px, -54px) scale(1.3);
+.composer.attachments-open .attachment-menu .icon-button:hover {
+  transform: translate(var(--x), var(--y)) scale(1.3);
 }
 
-.composer.attachments-open .attachment-menu #pick-image:hover {
-  transform: translate(-40px, -40px) scale(1.3);
-}
-
-.composer.attachments-open .attachment-menu #pick-file:hover {
-  transform: translate(-58px, -4px) scale(1.3);
-}
-
-.composer.attachments-open .attachment-menu:hover #record-voice:not(:hover) {
-  transform: translate(-4px, -54px) scale(0.8);
-}
-
-.composer.attachments-open .attachment-menu:hover #pick-image:not(:hover) {
-  transform: translate(-40px, -40px) scale(0.8);
-}
-
-.composer.attachments-open .attachment-menu:hover #pick-file:not(:hover) {
-  transform: translate(-58px, -4px) scale(0.8);
+.composer.attachments-open .attachment-menu:hover .icon-button:not(:hover) {
+  transform: translate(var(--x), var(--y)) scale(0.8);
 }
 
 .selection-bar {

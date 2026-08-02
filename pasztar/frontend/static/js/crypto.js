@@ -1,53 +1,14 @@
-import { attachmentName, decoder, encoder, state } from "./context.js";
+import { attachmentName, state } from "./context.js";
+import { b64, bytes, decoder, encoder, sha256Hex } from "./crypto_core.js";
 
-export function b64(bytes) {
-  const data = new Uint8Array(bytes);
-  let binary = "";
-  for (let index = 0; index < data.length; index += 0x8000) {
-    binary += String.fromCharCode(...data.subarray(index, index + 0x8000));
-  }
-  return btoa(binary);
-}
-
-export function bytes(value) {
-  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
-}
-
-export async function bundleKey(passphrase, salt, usages) {
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(passphrase),
-    "PBKDF2",
-    false,
-    ["deriveKey"],
-  );
-  return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 250000,
-      hash: "SHA-256",
-    },
-    baseKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    usages,
-  );
-}
-
-export async function sha256Hex(data) {
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(hash)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-export async function fingerprint(publicKey) {
-  const hash = await crypto.subtle.digest("SHA-256", encoder.encode(publicKey));
-  return [...new Uint8Array(hash)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
+export {
+  apiJson,
+  b64,
+  bundleKey,
+  bytes,
+  fingerprint,
+  sha256Hex,
+} from "./crypto_core.js";
 
 export async function signingPrivateKey() {
   return crypto.subtle.importKey(
@@ -114,14 +75,6 @@ export async function signedFetch(path, options = {}) {
       ...(options.headers || {}),
     },
   });
-}
-
-export async function apiJson(response) {
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.detail || response.statusText);
-  }
-  return data;
 }
 
 export async function encryptFor(recipient, plaintext, metadata = {}) {

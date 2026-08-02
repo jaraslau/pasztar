@@ -43,8 +43,7 @@ export function messageAuthor(message) {
   return displayNameForId(message.sender_id);
 }
 
-export async function messageSummary(message) {
-  const payload = await decryptMessage(message);
+function summarizePayload(payload) {
   if (payload.kind === "voice") {
     return "Voice message";
   }
@@ -58,6 +57,20 @@ export async function messageSummary(message) {
     return `Call ${payload.event}`;
   }
   return truncateText(payload.text || "[unable to decrypt]");
+}
+
+async function messagePayload(message, payloads) {
+  if (!payloads) {
+    return decryptMessage(message);
+  }
+  if (!payloads.has(message.id)) {
+    payloads.set(message.id, decryptMessage(message));
+  }
+  return payloads.get(message.id);
+}
+
+export async function messageSummary(message) {
+  return summarizePayload(await decryptMessage(message));
 }
 
 export function clearReplyTarget() {
@@ -709,7 +722,7 @@ export function scrollToMessage(messageId) {
   node?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
-export async function renderReplyQuote(replyToId) {
+export async function renderReplyQuote(replyToId, payloads = null) {
   const original = state.messages.find((message) => message.id === replyToId);
   const quote = document.createElement("button");
   const label = document.createElement("span");
@@ -722,7 +735,7 @@ export async function renderReplyQuote(replyToId) {
     : "Reply";
   text.className = "reply-quote-text";
   text.textContent = original
-    ? await messageSummary(original)
+    ? summarizePayload(await messagePayload(original, payloads))
     : "Original message unavailable";
   if (original) {
     quote.addEventListener("click", (event) => {
@@ -734,8 +747,7 @@ export async function renderReplyQuote(replyToId) {
   return quote;
 }
 
-export async function renderForwardedFrom(message) {
-  const payload = await decryptMessage(message);
+export function renderForwardedFrom(message, payload) {
   if (!payload.forwardedFrom) {
     return null;
   }
@@ -746,8 +758,7 @@ export async function renderForwardedFrom(message) {
   return forwarded;
 }
 
-export async function renderMessageBody(message) {
-  const payload = await decryptMessage(message);
+export async function renderMessageBody(message, payload) {
   if (payload.kind === "call_event") {
     if (!["started", "ended"].includes(payload.event)) {
       return null;
@@ -995,6 +1006,7 @@ export async function renderMessagesFromState({
   const nextStops = new Set();
   const previousStops = state.voiceStops;
   state.voiceStops = nextStops;
+  const payloads = new Map();
   let lastDay = "";
   for (const message of state.messages) {
     if (state.selected && peerId(message) !== state.selected.id) {
@@ -1031,7 +1043,8 @@ export async function renderMessagesFromState({
     metaTime.className = "meta-time";
     metaTime.textContent = formatMessageTime(sentAt);
     item.append(metaTime);
-    const forwardedFrom = await renderForwardedFrom(message);
+    const payload = await messagePayload(message, payloads);
+    const forwardedFrom = renderForwardedFrom(message, payload);
     if (forwardedFrom) {
       item.classList.add("forwarded-message");
       item.style.setProperty(
@@ -1041,9 +1054,9 @@ export async function renderMessagesFromState({
       content.append(forwardedFrom);
     }
     if (message.reply_to_id) {
-      content.append(await renderReplyQuote(message.reply_to_id));
+      content.append(await renderReplyQuote(message.reply_to_id, payloads));
     }
-    const body = await renderMessageBody(message);
+    const body = await renderMessageBody(message, payload);
     if (!body) {
       continue;
     }

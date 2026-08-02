@@ -1,5 +1,4 @@
 import {
-  decoder,
   els,
   eventReconnectBaseMs,
   eventReconnectMaxMs,
@@ -10,6 +9,7 @@ import {
   status,
 } from "./context.js";
 import { apiJson, b64, bundleKey, signedFetch } from "./crypto.js";
+import { decoder } from "./crypto_core.js";
 import {
   beginForwarding,
   cancelForwarding,

@@ -7,8 +7,6 @@ export const maxImageDimension = 1600;
 export const eventReconnectBaseMs = 2000;
 export const eventReconnectMaxMs = 30000;
 export const callHeartbeatMs = 10000;
-export const encoder = new TextEncoder();
-export const decoder = new TextDecoder();
 
 export const state = {
   identity: null,
