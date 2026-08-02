@@ -1010,8 +1010,8 @@ export async function renderMessagesFromState({
       lastDay = currentDay;
     }
     const item = document.createElement("article");
-    item.className =
-      message.sender_id === state.identity.clientId ? "message own" : "message";
+    const isOwn = message.sender_id === state.identity.clientId;
+    item.className = isOwn ? "message own" : "message incoming";
     item.dataset.messageId = message.id;
     item.classList.toggle("selected", state.selectedMessageIds.has(message.id));
     item.addEventListener("click", () => {
@@ -1022,10 +1022,11 @@ export async function renderMessagesFromState({
     item.addEventListener("contextmenu", (event) => {
       showMessageMenu(event, message);
     });
-    const isOwn = message.sender_id === state.identity.clientId;
     if (isOwn) {
       item.dataset.status = messageState(message);
     }
+    const content = document.createElement("div");
+    content.className = "message-content";
     const metaTime = document.createElement("span");
     metaTime.className = "meta-time";
     metaTime.textContent = formatMessageTime(sentAt);
@@ -1037,22 +1038,26 @@ export async function renderMessagesFromState({
         "--forward-line",
         forwardLineColor(forwardedFrom.dataset.forwardedFrom),
       );
-      item.append(forwardedFrom);
+      content.append(forwardedFrom);
     }
     if (message.reply_to_id) {
-      item.append(await renderReplyQuote(message.reply_to_id));
+      content.append(await renderReplyQuote(message.reply_to_id));
     }
     const body = await renderMessageBody(message);
     if (!body) {
       continue;
     }
-    item.append(body);
+    if (body.classList.contains("call-event-message")) {
+      item.className = "message call-event-row";
+    }
+    content.append(body);
     const metaWho = document.createElement("p");
     metaWho.className = "meta-who";
     metaWho.textContent = isOwn
       ? `to ${message.recipient_id}`
       : `from ${message.sender_id}`;
-    item.append(metaWho);
+    content.append(metaWho);
+    item.append(content);
     nextMessages.append(item);
   }
   previousStops.forEach((stop) => stop());

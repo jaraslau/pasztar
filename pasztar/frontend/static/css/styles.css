@@ -1,12 +1,12 @@
 :root {
   color-scheme: dark;
-  --bg: #0a0d0f;
-  --panel: #12171a;
-  --panel-soft: #0d1215;
-  --panel-raised: #1b2226;
-  --line: #232b2f;
-  --line-soft: #1a2124;
-  --line-strong: #3a464c;
+  --bg: #101518;
+  --panel: #182025;
+  --panel-soft: #141b1f;
+  --panel-raised: #232d33;
+  --line: #2d363c;
+  --line-soft: #232c31;
+  --line-strong: #46535b;
   --text: #eef3f4;
   --muted: #8091998f;
   --muted-strong: #8a9aa1;
@@ -26,6 +26,11 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
 }
 
 body {
@@ -461,7 +466,7 @@ label {
   gap: 3px;
   min-height: 0;
   overflow: auto;
-  padding: 24px 72px;
+  padding: 24px 36px;
   scrollbar-color: var(--line-strong) transparent;
 }
 
@@ -630,43 +635,75 @@ button.icon-button.active {
 }
 
 .message {
-  width: fit-content;
-  max-width: min(64ch, 74%);
+  display: grid;
+  align-items: end;
+  column-gap: 10px;
+  width: 100%;
+  max-width: none;
   min-width: 0;
   margin-top: 20px;
   overflow-wrap: anywhere;
-  position: relative;
   transition: opacity 0.15s ease;
 }
 
 .message.own {
-  align-self: flex-end;
+  grid-template-columns: minmax(82px, 30%) minmax(0, 1fr);
+  align-self: stretch;
   text-align: right;
-  padding: 5px 18px 5px 4px;
-  border-right: 2px solid var(--accent);
 }
 
-.message:not(.own) {
-  align-self: flex-start;
+.message.incoming {
+  grid-template-columns: minmax(0, 1fr) minmax(82px, 30%);
+  align-self: stretch;
   text-align: left;
-  padding: 5px 4px 5px 18px;
-  border-left: 2px solid var(--warm);
 }
 
 .message.own + .message.own,
-.message:not(.own) + .message:not(.own) {
+.message.incoming + .message.incoming {
   margin-top: 0;
 }
 
+.message + .message {
+  margin-top: 0;
+}
+
+.message.own + .message.incoming,
+.message.incoming + .message.own {
+  margin-top: 20px;
+}
+
 .message.selected {
+  background: transparent;
+}
+
+.message.selected .message-content {
   border-radius: 8px;
   background: var(--warm-glow);
   box-shadow: 0 0 0 1px rgb(224 172 104 / 30%);
 }
 
+.message-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.message.own .message-content {
+  grid-column: 2;
+  justify-self: end;
+  max-width: min(64ch, 74%);
+  padding: 5px 18px 5px 4px;
+  border-right: 2px solid var(--accent);
+}
+
+.message.incoming .message-content {
+  grid-column: 1;
+  justify-self: start;
+  max-width: min(64ch, 74%);
+  padding: 5px 4px 5px 18px;
+  border-left: 2px solid var(--warm);
+}
+
 .meta-time {
-  position: absolute;
-  bottom: 5px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -674,16 +711,18 @@ button.icon-button.active {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  align-self: end;
+  margin-bottom: 5px;
 }
 
 .message.own .meta-time {
-  right: 100%;
-  margin-right: 10px;
+  grid-column: 1;
+  justify-self: start;
 }
 
-.message:not(.own) .meta-time {
-  left: 100%;
-  margin-left: 10px;
+.message.incoming .meta-time {
+  grid-column: 2;
+  justify-self: end;
   flex-direction: row-reverse;
 }
 
@@ -731,7 +770,7 @@ button.icon-button.active {
 }
 
 .message.own:has(+ .message.own) .meta-who,
-.message:not(.own):has(+ .message:not(.own)) .meta-who {
+.message.incoming:has(+ .message.incoming) .meta-who {
   display: none;
 }
 
@@ -765,7 +804,7 @@ button.icon-button.active {
   text-align: right;
 }
 
-.message:not(.own) .reply-quote {
+.message.incoming .reply-quote {
   text-align: left;
 }
 
@@ -806,17 +845,17 @@ button.icon-button.active {
   margin-left: auto;
 }
 
-.message:not(.own) .voice-player,
-.message:not(.own) .image-attachment,
-.message:not(.own) .file-attachment {
+.message.incoming .voice-player,
+.message.incoming .image-attachment,
+.message.incoming .file-attachment {
   margin-right: auto;
 }
 
-.message.own.forwarded-message {
+.message.own.forwarded-message .message-content {
   border-right-color: var(--forward-line);
 }
 
-.message:not(.own).forwarded-message {
+.message.incoming.forwarded-message .message-content {
   border-left-color: var(--forward-line);
 }
 
@@ -824,28 +863,31 @@ button.icon-button.active {
   color: var(--forward-line);
 }
 
-.message:has(.call-event-message) {
+.message.call-event-row {
   align-self: stretch;
-  width: calc(100% + 144px);
+  width: calc(100% + 72px);
   max-width: none;
-  display: grid;
-  align-items: center;
-  justify-items: center;
-  justify-content: center;
-  margin: 12px -72px;
-  padding: 10px 72px;
-  background: rgb(224 172 104 / 10%);
+  display: block;
+  margin: 12px -36px;
+  padding: 0;
   text-align: center;
   border: 0;
 }
 
-.message:has(.call-event-message)::before,
-.message:has(.call-event-message)::after {
+.message.call-event-row .message-content {
+  max-width: none;
+  border: 0;
+  background: rgb(224 172 104 / 10%);
+  padding: 10px 36px;
+}
+
+.message.call-event-row::before,
+.message.call-event-row::after {
   display: none;
 }
 
-.message:has(.call-event-message) .meta-time,
-.message:has(.call-event-message) .meta-who {
+.message.call-event-row .meta-time,
+.message.call-event-row .meta-who {
   display: none;
 }
 
@@ -907,7 +949,7 @@ button.icon-button.active {
   margin-left: auto;
 }
 
-.message:not(.own) .voice-player {
+.message.incoming .voice-player {
   margin-right: auto;
 }
 
@@ -1335,7 +1377,21 @@ button.icon-button.active {
   }
 
   .messages {
-    padding: 18px 16px;
+    padding: 18px 12px;
+  }
+
+  .message {
+    display: block;
+    width: fit-content;
+    max-width: min(64ch, 90%);
+  }
+
+  .message.own {
+    align-self: flex-end;
+  }
+
+  .message.incoming {
+    align-self: flex-start;
   }
 
   .meta-time {
@@ -1346,16 +1402,22 @@ button.icon-button.active {
     transform: none;
   }
 
-  .message:not(.own) .meta-time {
+  .message.incoming .meta-time {
     flex-direction: row;
   }
 
-  .message:has(.call-event-message) {
-    width: calc(100% + 32px);
-    margin-right: -16px;
-    margin-left: -16px;
-    padding-right: 16px;
-    padding-left: 16px;
+  .message.call-event-row {
+    width: calc(100% + 24px);
+    max-width: none;
+    margin-right: -12px;
+    margin-left: -12px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .message.call-event-row .message-content {
+    padding-right: 12px;
+    padding-left: 12px;
   }
 
   .chat-head {
