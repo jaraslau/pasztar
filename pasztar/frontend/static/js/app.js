@@ -23,6 +23,7 @@ const state = {
   voiceStops: new Set(),
   contextMenu: null,
   selectedMessageIds: new Set(),
+  replyTarget: null,
 };
 
 const savedIdentity = localStorage.getItem(storeKey);
@@ -50,6 +51,9 @@ const els = {
   voiceTimer: document.querySelector("#voice-timer"),
   cancelVoice: document.querySelector("#cancel-voice"),
   sendVoice: document.querySelector("#send-voice"),
+  replyPreview: document.querySelector("#reply-preview"),
+  replyPreviewText: document.querySelector("#reply-preview-text"),
+  cancelReply: document.querySelector("#cancel-reply"),
   selectionBar: document.querySelector("#selection-bar"),
   selectionCount: document.querySelector("#selection-count"),
   cancelSelection: document.querySelector("#cancel-selection"),
@@ -112,6 +116,56 @@ function status(text, error = false) {
   els.appStatus.classList.toggle("error", error);
 }
 
+function truncateText(value, length = 92) {
+  return value.length > length ? `${value.slice(0, length - 1)}...` : value;
+}
+
+function messageAuthor(message) {
+  if (message.sender_id === state.identity.clientId) {
+    return "You";
+  }
+  return (
+    state.clients.find((client) => client.id === message.sender_id)
+      ?.display_name || message.sender_id
+  );
+}
+
+async function messageSummary(message) {
+  const payload = await decryptMessage(message);
+  if (payload.kind === "voice") {
+    return "Voice message";
+  }
+  return truncateText(payload.text || "[unable to decrypt]");
+}
+
+function clearReplyTarget() {
+  state.replyTarget = null;
+  els.replyPreview.hidden = true;
+  els.replyPreviewText.textContent = "";
+}
+
+async function updateReplyUi() {
+  const target = state.replyTarget;
+  if (!target) {
+    clearReplyTarget();
+    return;
+  }
+  els.replyPreview.hidden = false;
+  els.replyPreviewText.textContent = `${messageAuthor(target)}: ${await messageSummary(
+    target,
+  )}`;
+}
+
+async function setReplyTarget(message) {
+  if (state.selectedMessageIds.size > 0) {
+    state.selectedMessageIds.clear();
+    updateSelectionUi();
+  }
+  state.replyTarget = message;
+  await updateReplyUi();
+  els.messageText.focus();
+}
+
 function closeContextMenu() {
   state.contextMenu?.remove();
   state.contextMenu = null;
@@ -146,6 +200,7 @@ function enterSelection(message) {
   if (state.recording) {
     stopVoiceRecording(false);
   }
+  clearReplyTarget();
   state.selectedMessageIds.add(message.id);
   updateSelectionUi();
   renderMessagesFromState().catch((error) => status(error.message, true));
@@ -673,19 +728,24 @@ async function sendMessage(event) {
   if (!text) {
     return;
   }
-  const body = JSON.stringify({
+  const payload = {
     id: crypto.randomUUID(),
     recipient_id: state.selected.id,
     ciphertext: await encryptFor(state.selected, text),
-  });
+  };
+  if (state.replyTarget && peerId(state.replyTarget) === state.selected.id) {
+    payload.reply_to_id = state.replyTarget.id;
+  }
+  const body = JSON.stringify(payload);
   await apiJson(await signedFetch("/messages", { method: "POST", body }));
   els.messageText.value = "";
+  clearReplyTarget();
   resizeMessageText();
   await loadMessages({ scrollToBottom: true });
 }
 
 async function sendVoiceMessage(blob, durationMs, recipient) {
-  const body = JSON.stringify({
+  const payload = {
     id: crypto.randomUUID(),
     recipient_id: recipient.id,
     ciphertext: await encryptFor(
@@ -697,8 +757,13 @@ async function sendVoiceMessage(blob, durationMs, recipient) {
         duration_ms: Math.round(durationMs),
       },
     ),
-  });
+  };
+  if (state.replyTarget && peerId(state.replyTarget) === recipient.id) {
+    payload.reply_to_id = state.replyTarget.id;
+  }
+  const body = JSON.stringify(payload);
   await apiJson(await signedFetch("/messages", { method: "POST", body }));
+  clearReplyTarget();
   status("Voice message sent.");
   await loadMessages({ scrollToBottom: true });
 }
@@ -752,9 +817,18 @@ function showMessageMenu(event, message) {
   event.preventDefault();
   closeContextMenu();
   const menu = document.createElement("div");
+  const replyButton = document.createElement("button");
   const selectButton = document.createElement("button");
   const deleteButton = document.createElement("button");
   menu.className = "context-menu";
+  replyButton.type = "button";
+  replyButton.className = "context-menu-item";
+  replyButton.innerHTML =
+    '<svg class="icon"><use href="#icon-reply"></use></svg>Reply';
+  replyButton.addEventListener("click", () => {
+    closeContextMenu();
+    setReplyTarget(message).catch((error) => status(error.message, true));
+  });
   selectButton.type = "button";
   selectButton.className = "context-menu-item";
   selectButton.innerHTML =
@@ -771,12 +845,44 @@ function showMessageMenu(event, message) {
     closeContextMenu();
     deleteMessage(message).catch((error) => status(error.message, true));
   });
-  menu.append(selectButton, deleteButton);
+  menu.append(replyButton, selectButton, deleteButton);
   document.body.append(menu);
   state.contextMenu = menu;
   const rect = menu.getBoundingClientRect();
   menu.style.left = `${Math.min(event.clientX, innerWidth - rect.width - 8)}px`;
   menu.style.top = `${Math.min(event.clientY, innerHeight - rect.height - 8)}px`;
+}
+
+function scrollToMessage(messageId) {
+  const node = [...els.messages.children].find(
+    (item) => item.dataset.messageId === messageId,
+  );
+  node?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+async function renderReplyQuote(replyToId) {
+  const original = state.messages.find((message) => message.id === replyToId);
+  const quote = document.createElement("button");
+  const label = document.createElement("span");
+  const text = document.createElement("span");
+  quote.type = "button";
+  quote.className = "reply-quote";
+  label.className = "reply-label";
+  label.textContent = original
+    ? `Reply to ${messageAuthor(original)}`
+    : "Reply";
+  text.className = "reply-quote-text";
+  text.textContent = original
+    ? await messageSummary(original)
+    : "Original message unavailable";
+  if (original) {
+    quote.addEventListener("click", (event) => {
+      event.stopPropagation();
+      scrollToMessage(original.id);
+    });
+  }
+  quote.append(label, text);
+  return quote;
 }
 
 async function renderMessageBody(message) {
@@ -968,6 +1074,7 @@ async function renderMessagesFromState({
   if (!state.selected) {
     state.voiceStops.forEach((stop) => stop());
     state.voiceStops.clear();
+    clearReplyTarget();
     els.messages.replaceChildren();
     return;
   }
@@ -981,6 +1088,9 @@ async function renderMessagesFromState({
       state.selectedMessageIds.delete(messageId);
     }
   }
+  if (state.replyTarget && !visibleIds.has(state.replyTarget.id)) {
+    clearReplyTarget();
+  }
   updateSelectionUi();
   const nextMessages = document.createDocumentFragment();
   const nextStops = new Set();
@@ -993,6 +1103,7 @@ async function renderMessagesFromState({
     const item = document.createElement("article");
     item.className =
       message.sender_id === state.identity.clientId ? "message own" : "message";
+    item.dataset.messageId = message.id;
     item.classList.toggle("selected", state.selectedMessageIds.has(message.id));
     item.addEventListener("click", () => {
       if (state.selectedMessageIds.size > 0) {
@@ -1008,7 +1119,11 @@ async function renderMessagesFromState({
       message.sender_id === state.identity.clientId
         ? `to ${message.recipient_id} - ${messageState(message)}`
         : `from ${message.sender_id}`;
-    item.append(meta, await renderMessageBody(message));
+    item.append(meta);
+    if (message.reply_to_id) {
+      item.append(await renderReplyQuote(message.reply_to_id));
+    }
+    item.append(await renderMessageBody(message));
     nextMessages.append(item);
   }
   previousStops.forEach((stop) => stop());
@@ -1039,6 +1154,7 @@ function renderClients() {
     node.addEventListener("click", async () => {
       state.selectedMessageIds.clear();
       updateSelectionUi();
+      clearReplyTarget();
       state.selected = client;
       localStorage.setItem(selectedKey, client.id);
       els.chatTitle.textContent = client.display_name;
@@ -1069,6 +1185,8 @@ document.addEventListener("keydown", (event) => {
     closeContextMenu();
     if (state.selectedMessageIds.size > 0) {
       exitSelection();
+    } else if (state.replyTarget) {
+      clearReplyTarget();
     }
   }
 });
@@ -1077,6 +1195,7 @@ els.cancelSelection.addEventListener("click", exitSelection);
 els.deleteSelected.addEventListener("click", () => {
   deleteSelectedMessages().catch((error) => status(error.message, true));
 });
+els.cancelReply.addEventListener("click", clearReplyTarget);
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));
 });

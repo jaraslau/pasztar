@@ -30,6 +30,7 @@ class Message(Base):
     id: Mapped[str] = mapped_column(String(80), primary_key=True)
     sender_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
     recipient_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    reply_to_id: Mapped[str | None] = mapped_column(String(80))
     ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

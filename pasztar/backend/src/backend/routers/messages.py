@@ -24,11 +24,19 @@ def create_message(
 ) -> Message:
     if db.get(Client, payload.recipient_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown recipient")
+    if payload.reply_to_id is not None:
+        reply_to = db.get(Message, payload.reply_to_id)
+        if reply_to is None or {reply_to.sender_id, reply_to.recipient_id} != {
+            client.id,
+            payload.recipient_id,
+        }:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown reply target")
 
     message = Message(
         id=payload.id,
         sender_id=client.id,
         recipient_id=payload.recipient_id,
+        reply_to_id=payload.reply_to_id,
         ciphertext=payload.ciphertext,
     )
     db.add(message)

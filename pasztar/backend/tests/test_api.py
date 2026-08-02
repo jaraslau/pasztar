@@ -190,6 +190,61 @@ def test_register_send_fetch_and_replay_rejection():
     assert [message["id"] for message in fetched.json()] == ["m1"]
 
 
+def test_message_reply_target_round_trips_and_stays_in_chat():
+    alice_private, alice_public = keypair()
+    _, bob_public = keypair()
+    _, charlie_public = keypair()
+
+    register_client("alice", "Alice", alice_public)
+    register_client("bob", "Bob", bob_public)
+    register_client("charlie", "Charlie", charlie_public)
+
+    original = b'{"id":"m1","recipient_id":"bob","ciphertext":"opaque"}'
+    assert (
+        client.post(
+            "/messages",
+            content=original,
+            headers=signed("POST", "/messages", original, "alice", alice_private),
+        ).status_code
+        == 201
+    )
+
+    reply = json.dumps(
+        {
+            "id": "m2",
+            "recipient_id": "bob",
+            "reply_to_id": "m1",
+            "ciphertext": "opaque-reply",
+        }
+    ).encode()
+    sent = client.post(
+        "/messages",
+        content=reply,
+        headers=signed("POST", "/messages", reply, "alice", alice_private),
+    )
+    assert sent.status_code == 201
+    assert sent.json()["reply_to_id"] == "m1"
+
+    wrong_chat_reply = json.dumps(
+        {
+            "id": "m3",
+            "recipient_id": "charlie",
+            "reply_to_id": "m1",
+            "ciphertext": "opaque-wrong-chat",
+        }
+    ).encode()
+    assert (
+        client.post(
+            "/messages",
+            content=wrong_chat_reply,
+            headers=signed(
+                "POST", "/messages", wrong_chat_reply, "alice", alice_private
+            ),
+        ).status_code
+        == 404
+    )
+
+
 def test_message_rejects_oversized_ciphertext():
     alice_private, alice_public = keypair()
     _, bob_public = keypair()
