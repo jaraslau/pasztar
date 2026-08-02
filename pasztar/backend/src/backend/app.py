@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.core.settings import settings
-from backend.routers import clients, events, health, messages
+from backend.routers import calls, clients, events, health, messages
 
 
 @asynccontextmanager
@@ -31,4 +31,5 @@ app = FastAPI(title="Pasztar", lifespan=db_lifespan, debug=settings.debug_mode)
 app.include_router(health.router)
 app.include_router(clients.router)
 app.include_router(messages.router)
+app.include_router(calls.router)
 app.include_router(events.router)

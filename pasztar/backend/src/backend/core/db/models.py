@@ -37,6 +37,41 @@ class Message(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class Call(Base):
+    __tablename__ = "calls"
+
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    client_a_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    client_b_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    started_by_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CallParticipant(Base):
+    __tablename__ = "call_participants"
+
+    call_id: Mapped[str] = mapped_column(
+        ForeignKey("calls.id"), primary_key=True, nullable=False
+    )
+    client_id: Mapped[str] = mapped_column(
+        ForeignKey("clients.id"), primary_key=True, nullable=False
+    )
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class CallSignal(Base):
+    __tablename__ = "call_signals"
+
+    id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    call_id: Mapped[str] = mapped_column(ForeignKey("calls.id"), nullable=False)
+    sender_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    recipient_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class Nonce(Base):
     __tablename__ = "nonces"
     __table_args__ = (UniqueConstraint("client_id", "nonce"),)
@@ -49,4 +84,11 @@ class Nonce(Base):
 
 Index("ix_messages_recipient_created", Message.recipient_id, Message.created_at)
 Index("ix_messages_sender_created", Message.sender_id, Message.created_at)
+Index("ix_calls_pair_active", Call.client_a_id, Call.client_b_id, Call.ended_at)
+Index("ix_call_participants_last_seen", CallParticipant.last_seen_at)
+Index(
+    "ix_call_signals_recipient_created",
+    CallSignal.recipient_id,
+    CallSignal.created_at,
+)
 Index("ix_nonces_created", Nonce.created_at)

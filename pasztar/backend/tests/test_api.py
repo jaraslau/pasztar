@@ -18,7 +18,7 @@ from backend.core.db.models import Base
 from backend.core.db.session import get_db
 from backend.core.signing import signature_payload
 from backend.routers import clients as clients_router
-from backend.schemas.messages import MAX_CIPHERTEXT_LENGTH
+from backend.schemas.messages import MAX_CIPHERTEXT_LENGTH, MessageCreate
 
 
 engine = create_engine(
@@ -245,28 +245,133 @@ def test_message_reply_target_round_trips_and_stays_in_chat():
     )
 
 
-def test_message_rejects_oversized_ciphertext():
+def test_call_lifecycle_reuses_active_call_and_ends_when_empty():
     alice_private, alice_public = keypair()
-    _, bob_public = keypair()
-
+    bob_private, bob_public = keypair()
     register_client("alice", "Alice", alice_public)
     register_client("bob", "Bob", bob_public)
 
-    body = json.dumps(
-        {
-            "id": "m1",
-            "recipient_id": "bob",
-            "ciphertext": "x" * (MAX_CIPHERTEXT_LENGTH + 1),
-        }
-    ).encode()
+    create = json.dumps({"recipient_id": "bob"}).encode()
+    started = client.post(
+        "/calls",
+        content=create,
+        headers=signed("POST", "/calls", create, "alice", alice_private),
+    )
+    assert started.status_code == 201
+    call = started.json()
+    assert call["client_a_id"] == "alice"
+    assert call["client_b_id"] == "bob"
+    assert call["started_by_id"] == "alice"
+    assert call["participants"] == ["alice"]
 
-    response = client.post(
-        "/messages",
-        content=body,
-        headers=signed("POST", "/messages", body, "alice", alice_private),
+    bob_calls = client.get(
+        "/calls",
+        headers=signed("GET", "/calls", b"", "bob", bob_private),
+    )
+    assert bob_calls.status_code == 200
+    assert [item["id"] for item in bob_calls.json()] == [call["id"]]
+
+    joined = client.post(
+        f"/calls/{call['id']}/join",
+        headers=signed("POST", f"/calls/{call['id']}/join", b"", "bob", bob_private),
+    )
+    assert joined.status_code == 200
+    assert joined.json()["participants"] == ["alice", "bob"]
+
+    retry = client.post(
+        "/calls",
+        content=create,
+        headers=signed("POST", "/calls", create, "alice", alice_private),
+    )
+    assert retry.status_code == 201
+    assert retry.json()["id"] == call["id"]
+
+    bob_left = client.post(
+        f"/calls/{call['id']}/leave",
+        headers=signed("POST", f"/calls/{call['id']}/leave", b"", "bob", bob_private),
+    )
+    assert bob_left.status_code == 200
+    assert bob_left.json()["ended_at"] is None
+    assert bob_left.json()["participants"] == ["alice"]
+
+    alice_left = client.post(
+        f"/calls/{call['id']}/leave",
+        headers=signed(
+            "POST", f"/calls/{call['id']}/leave", b"", "alice", alice_private
+        ),
+    )
+    assert alice_left.status_code == 200
+    assert alice_left.json()["ended_at"] is not None
+    assert alice_left.json()["participants"] == []
+
+
+def test_call_visibility_and_signals_are_limited_to_chat_participants():
+    alice_private, alice_public = keypair()
+    bob_private, bob_public = keypair()
+    charlie_private, charlie_public = keypair()
+    register_client("alice", "Alice", alice_public)
+    register_client("bob", "Bob", bob_public)
+    register_client("charlie", "Charlie", charlie_public)
+
+    create = json.dumps({"recipient_id": "bob"}).encode()
+    started = client.post(
+        "/calls",
+        content=create,
+        headers=signed("POST", "/calls", create, "alice", alice_private),
+    )
+    call_id = started.json()["id"]
+
+    assert (
+        client.post(
+            f"/calls/{call_id}/join",
+            headers=signed(
+                "POST", f"/calls/{call_id}/join", b"", "charlie", charlie_private
+            ),
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/calls/{call_id}/join",
+            headers=signed("POST", f"/calls/{call_id}/join", b"", "bob", bob_private),
+        ).status_code
+        == 200
     )
 
-    assert response.status_code == 422
+    signal = json.dumps(
+        {"id": "s1", "recipient_id": "bob", "ciphertext": "opaque-signal"}
+    ).encode()
+    sent = client.post(
+        f"/calls/{call_id}/signals",
+        content=signal,
+        headers=signed(
+            "POST", f"/calls/{call_id}/signals", signal, "alice", alice_private
+        ),
+    )
+    assert sent.status_code == 201
+
+    bob_signals = client.get(
+        f"/calls/{call_id}/signals",
+        headers=signed("GET", f"/calls/{call_id}/signals", b"", "bob", bob_private),
+    )
+    assert bob_signals.status_code == 200
+    assert [item["ciphertext"] for item in bob_signals.json()] == ["opaque-signal"]
+
+    charlie_signals = client.get(
+        f"/calls/{call_id}/signals",
+        headers=signed(
+            "GET", f"/calls/{call_id}/signals", b"", "charlie", charlie_private
+        ),
+    )
+    assert charlie_signals.status_code == 404
+
+
+def test_message_ciphertext_limit_is_generous_but_bounded():
+    assert MAX_CIPHERTEXT_LENGTH == 160 * 1024 * 1024
+    assert any(
+        getattr(item, "max_length", None) == MAX_CIPHERTEXT_LENGTH
+        for item in MessageCreate.model_fields["ciphertext"].metadata
+    )
 
 
 def test_auth_rejects_unknown_client_bad_signature_and_stale_timestamp():

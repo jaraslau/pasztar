@@ -43,6 +43,21 @@
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
         <path d="M14 2v6h6" />
       </symbol>
+      <symbol id="icon-video" viewBox="0 0 24 24">
+        <path d="M15 10l5-3v10l-5-3Z" />
+        <rect x="3" y="6" width="12" height="12" rx="2" />
+      </symbol>
+      <symbol id="icon-video-off" viewBox="0 0 24 24">
+        <path d="M3 3l18 18" />
+        <path d="M10.5 6H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 1.7-.9" />
+        <path d="M15 10l5-3v9.5" />
+      </symbol>
+      <symbol id="icon-phone-off" viewBox="0 0 24 24">
+        <path d="M3 3l18 18" />
+        <path
+          d="M14.5 14.5 17 12l4 4-3 3c-5.5-.5-10.5-5.5-11-11l3-3 4 4-2.5 2.5"
+        />
+      </symbol>
       <symbol id="icon-play" viewBox="0 0 24 24">
         <path d="m8 5 11 7-11 7V5Z" />
       </symbol>
@@ -112,6 +127,16 @@
           </div>
           <div class="actions">
             <button
+              id="start-call"
+              type="button"
+              class="icon-button"
+              title="Start video call"
+              aria-label="Start video call"
+              disabled
+            >
+              <svg class="icon"><use href="#icon-video"></use></svg>
+            </button>
+            <button
               id="open-settings"
               type="button"
               class="icon-button"
@@ -124,6 +149,69 @@
         </header>
 
         <div id="messages" class="messages"></div>
+
+        <section id="call-panel" class="call-panel" hidden>
+          <div class="call-stage">
+            <video
+              id="remote-video"
+              class="remote-video"
+              autoplay
+              playsinline
+            ></video>
+            <video
+              id="local-video"
+              class="local-video"
+              autoplay
+              muted
+              playsinline
+            ></video>
+          </div>
+          <div class="call-controls">
+            <span id="call-status" class="call-status"></span>
+            <div class="call-actions">
+              <button id="accept-call" type="button" class="secondary">
+                <svg class="icon"><use href="#icon-video"></use></svg>
+                Join
+              </button>
+              <button
+                id="decline-call"
+                type="button"
+                class="icon-button"
+                title="Decline call"
+                aria-label="Decline call"
+              >
+                <svg class="icon"><use href="#icon-x"></use></svg>
+              </button>
+              <button
+                id="mute-call"
+                type="button"
+                class="icon-button"
+                title="Mute microphone"
+                aria-label="Mute microphone"
+              >
+                <svg class="icon"><use href="#icon-mic"></use></svg>
+              </button>
+              <button
+                id="camera-call"
+                type="button"
+                class="icon-button"
+                title="Turn camera off"
+                aria-label="Turn camera off"
+              >
+                <svg class="icon"><use href="#icon-video"></use></svg>
+              </button>
+              <button
+                id="leave-call"
+                type="button"
+                class="icon-button danger-button"
+                title="Leave call"
+                aria-label="Leave call"
+              >
+                <svg class="icon"><use href="#icon-phone-off"></use></svg>
+              </button>
+            </div>
+          </div>
+        </section>
 
         <div id="forwarding-bar" class="forwarding-bar" hidden>
           <span id="forwarding-count" class="forwarding-count"></span>
