@@ -226,6 +226,8 @@ textarea {
 .sidebar {
   background: linear-gradient(180deg, rgb(18 23 26 / 60%), transparent 120px);
   position: relative;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .sidebar::after {
@@ -244,6 +246,13 @@ textarea {
 
 .clients-panel.forwarding {
   background: linear-gradient(180deg, var(--accent-glow), transparent 200px);
+}
+
+.clients-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
 }
 
 h1,
@@ -332,7 +341,9 @@ label {
 .clients {
   display: grid;
   gap: 2px;
+  min-height: 0;
   margin-top: 16px;
+  overflow: auto;
 }
 
 .client {
@@ -635,11 +646,9 @@ button.icon-button.active {
 }
 
 .message {
-  display: grid;
-  align-items: end;
-  column-gap: 10px;
-  width: 100%;
-  max-width: none;
+  display: block;
+  width: fit-content;
+  max-width: min(64ch, 74%);
   min-width: 0;
   margin-top: 20px;
   overflow-wrap: anywhere;
@@ -647,29 +656,17 @@ button.icon-button.active {
 }
 
 .message.own {
-  grid-template-columns: minmax(82px, 30%) minmax(0, 1fr);
-  align-self: stretch;
+  align-self: flex-end;
   text-align: right;
 }
 
 .message.incoming {
-  grid-template-columns: minmax(0, 1fr) minmax(82px, 30%);
-  align-self: stretch;
+  align-self: flex-start;
   text-align: left;
-}
-
-.message.own + .message.own,
-.message.incoming + .message.incoming {
-  margin-top: 0;
 }
 
 .message + .message {
   margin-top: 0;
-}
-
-.message.own + .message.incoming,
-.message.incoming + .message.own {
-  margin-top: 20px;
 }
 
 .message.selected {
@@ -688,42 +685,31 @@ button.icon-button.active {
 }
 
 .message.own .message-content {
-  grid-column: 2;
-  justify-self: end;
-  max-width: min(64ch, 74%);
+  max-width: 100%;
   padding: 5px 18px 5px 4px;
   border-right: 2px solid var(--accent);
 }
 
 .message.incoming .message-content {
-  grid-column: 1;
-  justify-self: start;
-  max-width: min(64ch, 74%);
+  max-width: 100%;
   padding: 5px 4px 5px 18px;
   border-left: 2px solid var(--warm);
 }
 
 .meta-time {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 4px;
   color: var(--muted);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  align-self: end;
-  margin-bottom: 5px;
+  margin: 0 0 3px !important;
+  text-align: inherit;
 }
 
 .message.own .meta-time {
-  grid-column: 1;
-  justify-self: start;
-}
-
-.message.incoming .meta-time {
-  grid-column: 2;
-  justify-self: end;
-  flex-direction: row-reverse;
+  justify-content: flex-end;
 }
 
 .message[data-status="sent"] .meta-time::before,
@@ -1396,7 +1382,7 @@ button.icon-button.active {
 
   .meta-time {
     position: static;
-    display: block;
+    display: flex;
     margin: 0 0 3px !important;
     text-align: inherit;
     transform: none;
