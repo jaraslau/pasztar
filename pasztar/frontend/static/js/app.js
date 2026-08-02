@@ -13,7 +13,8 @@ const state = {
   refreshing: false,
   marking: new Set(),
   recording: null,
-  audioUrls: [],
+  audioContext: null,
+  voiceStops: new Set(),
 };
 
 const savedIdentity = localStorage.getItem(storeKey);
@@ -388,6 +389,12 @@ function setPlaybackIcon(button, icon) {
   button.innerHTML = `<svg class="icon"><use href="#icon-${icon}"></use></svg>`;
 }
 
+function playbackContext() {
+  state.audioContext =
+    state.audioContext || new (window.AudioContext || window.webkitAudioContext)();
+  return state.audioContext;
+}
+
 function updateRecordingUi() {
   const recording = state.recording;
   els.recordVoice.hidden = Boolean(recording);
@@ -558,6 +565,7 @@ async function decryptMessage(message) {
       return {
         kind: "voice",
         data: plaintext,
+        durationMs: Number(envelope.duration_ms) || 0,
         mimeType: envelope.mime_type || "audio/webm",
       };
     }
@@ -615,66 +623,139 @@ async function sendVoiceMessage(blob, durationMs, recipient) {
 async function renderMessageBody(message) {
   const payload = await decryptMessage(message);
   if (payload.kind === "voice") {
-    const url = URL.createObjectURL(
-      new Blob([payload.data], { type: payload.mimeType }),
-    );
+    let buffer;
+    try {
+      buffer = await playbackContext().decodeAudioData(payload.data.slice(0));
+    } catch {
+      const text = document.createElement("p");
+      text.className = "message-text";
+      text.textContent = "[unable to play voice message]";
+      return text;
+    }
+    const duration = buffer.duration || payload.durationMs / 1000;
     const player = document.createElement("div");
     const button = document.createElement("button");
+    const rewind = document.createElement("button");
+    const forward = document.createElement("button");
     const seek = document.createElement("input");
     const time = document.createElement("span");
-    const audio = document.createElement("audio");
+    let source = null;
+    let startedAt = 0;
+    let offset = 0;
+    let frame = 0;
 
-    state.audioUrls.push(url);
     player.className = "voice-player";
     button.type = "button";
     button.className = "voice-play";
     button.setAttribute("aria-label", "Play voice message");
     setPlaybackIcon(button, "play");
+    rewind.type = "button";
+    rewind.className = "voice-step";
+    rewind.setAttribute("aria-label", "Rewind 5 seconds");
+    setPlaybackIcon(rewind, "rewind");
+    forward.type = "button";
+    forward.className = "voice-step";
+    forward.setAttribute("aria-label", "Forward 5 seconds");
+    setPlaybackIcon(forward, "forward");
     seek.type = "range";
     seek.className = "voice-seek";
     seek.min = "0";
-    seek.max = "0";
+    seek.max = String(duration);
     seek.step = "0.01";
     seek.value = "0";
     seek.setAttribute("aria-label", "Voice message position");
     time.className = "voice-time";
-    time.textContent = "0:00";
-    audio.hidden = true;
-    audio.preload = "metadata";
-    audio.src = url;
+    time.textContent = `0:00 / ${formatPlaybackTime(duration)}`;
 
-    audio.addEventListener("loadedmetadata", () => {
-      seek.max = String(audio.duration || 0);
-      time.textContent = `0:00 / ${formatPlaybackTime(audio.duration)}`;
-    });
-    audio.addEventListener("timeupdate", () => {
-      seek.value = String(audio.currentTime);
-      time.textContent = `${formatPlaybackTime(audio.currentTime)} / ${formatPlaybackTime(audio.duration)}`;
-    });
-    audio.addEventListener("play", () => {
-      button.setAttribute("aria-label", "Pause voice message");
-      setPlaybackIcon(button, "pause");
-    });
-    audio.addEventListener("pause", () => {
-      button.setAttribute("aria-label", "Play voice message");
+    const currentTime = () =>
+      source
+        ? Math.min(offset + (playbackContext().currentTime - startedAt), duration)
+        : offset;
+    const renderTime = () => {
+      const current = currentTime();
+      seek.value = String(current);
+      time.textContent = `${formatPlaybackTime(current)} / ${formatPlaybackTime(duration)}`;
+    };
+    const tick = () => {
+      renderTime();
+      if (source) {
+        frame = requestAnimationFrame(tick);
+      }
+    };
+    const stop = () => {
+      if (!source) {
+        return;
+      }
+      source.onended = null;
+      source.stop();
+      source.disconnect();
+      source = null;
+      cancelAnimationFrame(frame);
       setPlaybackIcon(button, "play");
-    });
-    audio.addEventListener("ended", () => {
-      audio.currentTime = 0;
-      seek.value = "0";
-    });
-    button.addEventListener("click", () => {
-      if (audio.paused) {
-        audio.play().catch((error) => status(error.message, true));
+      button.setAttribute("aria-label", "Play voice message");
+    };
+    const play = async () => {
+      stop();
+      if (offset >= duration) {
+        offset = 0;
+      }
+      await playbackContext().resume();
+      source = playbackContext().createBufferSource();
+      source.buffer = buffer;
+      source.connect(playbackContext().destination);
+      startedAt = playbackContext().currentTime;
+      source.onended = () => {
+        source = null;
+        offset = 0;
+        cancelAnimationFrame(frame);
+        setPlaybackIcon(button, "play");
+        button.setAttribute("aria-label", "Play voice message");
+        renderTime();
+      };
+      source.start(0, offset);
+      setPlaybackIcon(button, "pause");
+      button.setAttribute("aria-label", "Pause voice message");
+      tick();
+    };
+    const pause = () => {
+      offset = currentTime();
+      stop();
+      renderTime();
+    };
+    const seekTo = (seconds) => {
+      const wasPlaying = Boolean(source);
+      offset = Math.max(0, Math.min(seconds, duration));
+      if (wasPlaying) {
+        play().catch((error) => status(error.message, true));
       } else {
-        audio.pause();
+        renderTime();
+      }
+    };
+
+    renderTime();
+    state.voiceStops.add(stop);
+    window.addEventListener("beforeunload", stop, { once: true });
+    button.addEventListener("click", () => {
+      if (source) {
+        pause();
+      } else {
+        play().catch((error) => status(error.message, true));
       }
     });
     seek.addEventListener("input", () => {
-      audio.currentTime = Number(seek.value);
+      seekTo(Number(seek.value));
+    });
+    seek.addEventListener("change", () => {
+      seekTo(Number(seek.value));
+    });
+    rewind.addEventListener("click", () => {
+      seekTo(currentTime() - 5);
+    });
+    forward.addEventListener("click", () => {
+      seekTo(currentTime() + 5);
     });
 
-    player.append(button, seek, time, audio);
+    player.append(button, rewind, seek, time, forward);
     return player;
   }
   const text = document.createElement("p");
@@ -687,8 +768,8 @@ async function loadMessages({ scrollToBottom = false } = {}) {
   const scrollFromBottom = els.messages.scrollHeight - els.messages.scrollTop;
   state.messages = await apiJson(await signedFetch("/messages?limit=100"));
   await syncMessageState();
-  state.audioUrls.forEach((url) => URL.revokeObjectURL(url));
-  state.audioUrls = [];
+  state.voiceStops.forEach((stop) => stop());
+  state.voiceStops.clear();
   els.messages.replaceChildren();
   renderClients();
   if (!state.selected) {

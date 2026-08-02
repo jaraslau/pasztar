@@ -376,10 +376,10 @@ label {
 
 .voice-player {
   display: grid;
-  grid-template-columns: 38px minmax(120px, 1fr) auto;
+  grid-template-columns: 38px 34px minmax(120px, 1fr) auto 34px;
   align-items: center;
   gap: 10px;
-  width: min(360px, 72vw);
+  width: min(440px, 76vw);
   margin-top: 7px;
   border: 1px solid rgb(215 164 95 / 30%);
   border-radius: 8px;
@@ -399,6 +399,27 @@ label {
 
 .voice-play:hover {
   background: #35291b;
+}
+
+.voice-step {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-color: var(--line);
+  background: #1d262b;
+  color: var(--muted);
+  padding: 0;
+}
+
+.voice-step .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.voice-step:hover {
+  border-color: var(--line-strong);
+  background: #263139;
+  color: var(--text);
 }
 
 .voice-seek {
@@ -523,11 +544,17 @@ label {
   }
 
   .voice-player {
-    width: min(300px, 78vw);
-    grid-template-columns: 36px minmax(88px, 1fr);
+    width: min(330px, 82vw);
+    grid-template-columns: 36px 32px minmax(88px, 1fr) 32px;
+  }
+
+  .voice-player .voice-step:last-of-type {
+    grid-column: 4;
+    grid-row: 1;
   }
 
   .voice-time {
-    grid-column: 2;
+    grid-column: 3;
+    grid-row: 2;
   }
 }
