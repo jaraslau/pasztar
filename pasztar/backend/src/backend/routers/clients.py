@@ -7,6 +7,7 @@ from backend.core.auth import require_client
 from backend.core.db.models import Client, now
 from backend.core.db.session import get_db
 from backend.core.events import events
+from backend.core.helpers.clients import existing_registration
 from backend.core.signing import fingerprint
 from backend.schemas.clients import (
     ClientCreate,
@@ -16,25 +17,6 @@ from backend.schemas.clients import (
 )
 
 router = APIRouter()
-
-
-def same_registration(client: Client, payload: ClientCreate) -> bool:
-    return (
-        client.display_name == payload.display_name
-        and client.public_key == payload.public_key
-        and client.encryption_public_key == payload.encryption_public_key
-    )
-
-
-def existing_registration(
-    client: Client | None,
-    payload: ClientCreate,
-    response: Response,
-) -> Client:
-    if client is not None and same_registration(client, payload):
-        response.status_code = status.HTTP_200_OK
-        return client
-    raise HTTPException(status.HTTP_409_CONFLICT, "client already exists")
 
 
 @router.post(

@@ -19,7 +19,7 @@ from backend.core.db.session import get_db
 from backend.core.signing import signature_payload
 from backend.core.settings import settings
 from backend.routers import clients as clients_router
-from backend.schemas.messages import MAX_CIPHERTEXT_LENGTH, MessageCreate
+from backend.schemas.messages import MessageCreate
 
 
 engine = create_engine(
@@ -395,9 +395,9 @@ def test_call_config_exposes_ice_servers(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_message_ciphertext_limit_is_generous_but_bounded():
-    assert MAX_CIPHERTEXT_LENGTH == 160 * 1024 * 1024
+    assert settings.message_ciphertext_max_length == 160 * 1024 * 1024
     assert any(
-        getattr(item, "max_length", None) == MAX_CIPHERTEXT_LENGTH
+        getattr(item, "max_length", None) == settings.message_ciphertext_max_length
         for item in MessageCreate.model_fields["ciphertext"].metadata
     )
 

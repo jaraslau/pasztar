@@ -3,8 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
-MAX_SIGNAL_LENGTH = 256 * 1024
+from backend.core.settings import settings
 
 
 class CallCreate(BaseModel):
@@ -30,7 +29,7 @@ class CallConfigOut(BaseModel):
 class CallSignalCreate(BaseModel):
     id: str = Field(min_length=1, max_length=80)
     recipient_id: str = Field(min_length=1, max_length=80)
-    ciphertext: str = Field(min_length=1, max_length=MAX_SIGNAL_LENGTH)
+    ciphertext: str = Field(min_length=1, max_length=settings.call_signal_max_length)
 
 
 class CallSignalOut(BaseModel):

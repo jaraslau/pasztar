@@ -20,6 +20,12 @@ def test_settings_loads_env_file(
         "DEBUG_MODE",
         "SIGNATURE_MAX_SKEW_SECONDS",
         "CALL_ICE_SERVERS",
+        "CALL_STALE_AFTER_SECONDS",
+        "CALL_SIGNAL_STALE_AFTER_SECONDS",
+        "CALL_SIGNAL_MAX_LENGTH",
+        "MESSAGE_CIPHERTEXT_MAX_LENGTH",
+        "MESSAGE_LIST_DEFAULT_LIMIT",
+        "MESSAGE_LIST_MAX_LIMIT",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -33,6 +39,12 @@ def test_settings_loads_env_file(
                 "DEBUG_MODE=true",
                 "SIGNATURE_MAX_SKEW_SECONDS=42",
                 'CALL_ICE_SERVERS=[{"urls":"stun:stun.example.test:3478"}]',
+                "CALL_STALE_AFTER_SECONDS=44",
+                "CALL_SIGNAL_STALE_AFTER_SECONDS=601",
+                "CALL_SIGNAL_MAX_LENGTH=1024",
+                "MESSAGE_CIPHERTEXT_MAX_LENGTH=2048",
+                "MESSAGE_LIST_DEFAULT_LIMIT=12",
+                "MESSAGE_LIST_MAX_LIMIT=34",
                 "EXTRA_VALUE=ignored",
             ]
         )
@@ -46,6 +58,12 @@ def test_settings_loads_env_file(
     assert settings.debug_mode is True
     assert settings.signature_max_skew_seconds == 42
     assert settings.call_ice_servers == [{"urls": "stun:stun.example.test:3478"}]
+    assert settings.call_stale_after_seconds == 44
+    assert settings.call_signal_stale_after_seconds == 601
+    assert settings.call_signal_max_length == 1024
+    assert settings.message_ciphertext_max_length == 2048
+    assert settings.message_list_default_limit == 12
+    assert settings.message_list_max_limit == 34
 
 
 def test_settings_requires_database_url(monkeypatch: pytest.MonkeyPatch):

@@ -9,6 +9,7 @@ from backend.core.auth import require_client
 from backend.core.db.models import Client, Message, now
 from backend.core.db.session import get_db
 from backend.core.events import events
+from backend.core.settings import settings
 from backend.schemas.messages import MessageCreate, MessageOut
 
 router = APIRouter()
@@ -56,7 +57,11 @@ def create_message(
 @router.get("/messages", response_model=list[MessageOut])
 def list_messages(
     since: datetime | None = None,
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(
+        default=settings.message_list_default_limit,
+        ge=1,
+        le=settings.message_list_max_limit,
+    ),
     db: Session = Depends(get_db),
     client: Client = Depends(require_client),
 ) -> list[Message]:
