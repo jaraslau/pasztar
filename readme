@@ -1,1 +1,57 @@
 pasztar / arcana
+
+This is the 4th iteration of a messenger, that started 6 years ago as a school project.
+I wanted to finally make something out of it so I went with a node/local access model.
+You host it on your VPS and connect over the VPN like WireGuard or Tailscale.
+
+VPN-only deployment is strongly preferred
+
+The app is served by Docker Compose on the WireGuard server. The browser still
+needs HTTPS because WebCrypto is unavailable on plain HTTP origins.
+
+1. Configure env:
+
+  cp .env.example .env
+
+Use the WireGuard server IP for the app bindings:
+
+  FRONTEND_PORT=10.8.0.1:8080
+  API_PORT=10.8.0.1:8000
+
+Use the same WireGuard IP for TURN:
+
+  TURN_EXTERNAL_IP=10.8.0.1
+  CALL_ICE_SERVERS=[{"urls":["stun:10.8.0.1:3478","turn:10.8.0.1:3478?transport=udp","turn:10.8.0.1:3478?transport=tcp"],"username":"pasztar","credential":"strong-password"}]
+
+2. Start the app:
+
+  docker compose up -d --build
+
+3. Point DNS at the public server IP so Caddy can get a trusted cert:
+
+  pasztar.example.com A <server-public-ip>
+
+4. Add the Caddy reverse proxy:
+
+  pasztar.example.com {
+    @not_vpn {
+      not remote_ip 10.8.0.0/24 127.0.0.1 ::1
+    }
+    respond @not_vpn 403
+
+    reverse_proxy 10.8.0.1:8080
+  }
+
+5. Validate and reload Caddy:
+
+  sudo caddy validate --config /etc/caddy/Caddyfile
+  sudo systemctl reload caddy
+
+6. Open the app while connected to WireGuard:
+
+  https://pasztar.example.com
+
+If the page returns 403 while connected to WireGuard, browser traffic is reaching
+Caddy from a public IP instead of 10.8.0.0/24. Use full-tunnel WireGuard, route
+<server-public-ip>/32 through WireGuard, or use split DNS so pasztar.example.com
+resolves to 10.8.0.1 for VPN clients.
