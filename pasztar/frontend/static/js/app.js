@@ -432,6 +432,14 @@ function updateRecordingUi() {
     : "0:00";
 }
 
+function resizeMessageText() {
+  els.messageText.style.height = "46px";
+  els.messageText.style.height = `${Math.min(
+    els.messageText.scrollHeight,
+    160,
+  )}px`;
+}
+
 function recordingMimeType() {
   return window.MediaRecorder?.isTypeSupported?.("audio/webm;codecs=opus")
     ? "audio/webm;codecs=opus"
@@ -626,6 +634,7 @@ async function sendMessage(event) {
   });
   await apiJson(await signedFetch("/messages", { method: "POST", body }));
   els.messageText.value = "";
+  resizeMessageText();
   await loadMessages({ scrollToBottom: true });
 }
 
@@ -904,6 +913,7 @@ els.settingsModal.addEventListener("click", (event) => {
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));
 });
+els.messageText.addEventListener("input", resizeMessageText);
 els.recordVoice.addEventListener("click", () => {
   startVoiceRecording().catch((error) => status(error.message, true));
 });
@@ -915,6 +925,7 @@ els.sendVoice.addEventListener("click", () => {
 });
 
 if (savedIdentity) {
+  resizeMessageText();
   loadIdentity();
   connectEvents();
 }
