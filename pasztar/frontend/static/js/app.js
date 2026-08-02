@@ -13,6 +13,8 @@ const state = {
   messages: [],
   selected: null,
   refreshing: false,
+  loadingMessages: false,
+  pendingMessageLoad: null,
   eventsConnecting: false,
   eventReconnectMs: eventReconnectBaseMs,
   marking: new Set(),
@@ -248,7 +250,8 @@ async function loadClients() {
   state.clients = await apiJson(await signedFetch("/clients"));
   const selectedId = state.selected?.id || localStorage.getItem(selectedKey);
   if (selectedId) {
-    state.selected = state.clients.find((client) => client.id === selectedId) || null;
+    state.selected =
+      state.clients.find((client) => client.id === selectedId) || null;
     if (!state.selected) {
       localStorage.removeItem(selectedKey);
       els.chatTitle.textContent = "Select a client";
@@ -370,7 +373,9 @@ async function connectEvents() {
       const frames = buffer.split("\n\n");
       buffer = frames.pop();
       for (const frame of frames) {
-        const line = frame.split("\n").find((item) => item.startsWith("event: "));
+        const line = frame
+          .split("\n")
+          .find((item) => item.startsWith("event: "));
         if (line) {
           await handleEvent(line.slice(7));
         }
@@ -411,7 +416,8 @@ function setPlaybackIcon(button, icon) {
 
 function playbackContext() {
   state.audioContext =
-    state.audioContext || new (window.AudioContext || window.webkitAudioContext)();
+    state.audioContext ||
+    new (window.AudioContext || window.webkitAudioContext)();
   return state.audioContext;
 }
 
@@ -468,7 +474,9 @@ async function startVoiceRecording() {
       }
     });
     recorder.addEventListener("stop", () => {
-      finishVoiceRecording(recording).catch((error) => status(error.message, true));
+      finishVoiceRecording(recording).catch((error) =>
+        status(error.message, true),
+      );
     });
     recorder.start();
     recording.timer = setInterval(() => {
@@ -689,7 +697,10 @@ async function renderMessageBody(message) {
 
     const currentTime = () =>
       source
-        ? Math.min(offset + (playbackContext().currentTime - startedAt), duration)
+        ? Math.min(
+            offset + (playbackContext().currentTime - startedAt),
+            duration,
+          )
         : offset;
     const renderTime = () => {
       const current = currentTime();
@@ -784,17 +795,46 @@ async function renderMessageBody(message) {
   return text;
 }
 
-async function loadMessages({ scrollToBottom = false } = {}) {
-  const scrollFromBottom = els.messages.scrollHeight - els.messages.scrollTop;
-  state.messages = await apiJson(await signedFetch("/messages?limit=100"));
-  await syncMessageState();
-  state.voiceStops.forEach((stop) => stop());
-  state.voiceStops.clear();
-  els.messages.replaceChildren();
-  renderClients();
-  if (!state.selected) {
+async function loadMessages(options = {}) {
+  if (state.loadingMessages) {
+    state.pendingMessageLoad = {
+      scrollToBottom:
+        Boolean(state.pendingMessageLoad?.scrollToBottom) ||
+        Boolean(options.scrollToBottom),
+    };
     return;
   }
+  state.loadingMessages = true;
+  try {
+    await renderMessages(options);
+  } finally {
+    state.loadingMessages = false;
+  }
+  const pending = state.pendingMessageLoad;
+  state.pendingMessageLoad = null;
+  if (pending) {
+    await loadMessages(pending);
+  }
+}
+
+async function renderMessages({ scrollToBottom = false } = {}) {
+  const scrollFromBottom =
+    els.messages.scrollHeight -
+    els.messages.scrollTop -
+    els.messages.clientHeight;
+  state.messages = await apiJson(await signedFetch("/messages?limit=100"));
+  await syncMessageState();
+  renderClients();
+  if (!state.selected) {
+    state.voiceStops.forEach((stop) => stop());
+    state.voiceStops.clear();
+    els.messages.replaceChildren();
+    return;
+  }
+  const nextMessages = document.createDocumentFragment();
+  const nextStops = new Set();
+  const previousStops = state.voiceStops;
+  state.voiceStops = nextStops;
   for (const message of state.messages) {
     if (state.selected && peerId(message) !== state.selected.id) {
       continue;
@@ -809,11 +849,13 @@ async function loadMessages({ scrollToBottom = false } = {}) {
         ? `to ${message.recipient_id} - ${messageState(message)}`
         : `from ${message.sender_id}`;
     item.append(meta, await renderMessageBody(message));
-    els.messages.append(item);
+    nextMessages.append(item);
   }
+  previousStops.forEach((stop) => stop());
+  els.messages.replaceChildren(nextMessages);
   els.messages.scrollTop = scrollToBottom
     ? els.messages.scrollHeight
-    : els.messages.scrollHeight - scrollFromBottom;
+    : els.messages.scrollHeight - els.messages.clientHeight - scrollFromBottom;
 }
 
 function renderClients() {
@@ -825,7 +867,9 @@ function renderClients() {
     node.classList.toggle("self", isSelf);
     node.querySelector(".client-name").textContent = client.display_name;
     const count = unreadCount(client.id);
-    node.querySelector(".client-id").textContent = isSelf ? `${client.id} - you` : client.id;
+    node.querySelector(".client-id").textContent = isSelf
+      ? `${client.id} - you`
+      : client.id;
     if (count > 0) {
       const badge = document.createElement("span");
       badge.className = "unread";
