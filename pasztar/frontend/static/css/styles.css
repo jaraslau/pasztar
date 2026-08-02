@@ -345,13 +345,14 @@ label {
 
 .chat {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   min-width: 0;
   min-height: 0;
   background: rgb(12 16 18 / 82%);
 }
 
 .chat-head {
+  grid-row: 1;
   min-height: 74px;
   padding: 17px 24px;
   border-bottom: 1px solid var(--line);
@@ -360,6 +361,7 @@ label {
 }
 
 .messages {
+  grid-row: 3;
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -374,34 +376,56 @@ label {
   box-shadow: inset 0 0 0 1px rgb(215 164 95 / 16%);
 }
 
+.chat.call-expanded {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.chat.call-expanded .messages,
+.chat.call-expanded .forwarding-bar,
+.chat.call-expanded .composer,
+.chat.call-expanded .selection-bar {
+  display: none;
+}
+
 .call-panel {
+  grid-row: 2;
   display: grid;
   gap: 10px;
   padding: 12px 24px;
-  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   background: rgb(17 23 27 / 96%);
 }
 
 .call-stage {
   display: none;
+  align-items: center;
+  justify-items: center;
   position: relative;
-  min-height: 220px;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #06090a;
 }
 
-.call-panel.active-call .call-stage {
-  display: block;
+.call-panel.active-call:not(.compact-call) .call-stage {
+  display: grid;
 }
 
 .remote-video {
-  width: 100%;
-  height: 280px;
   display: block;
+  width: 100%;
+  height: min(52vh, 520px);
   object-fit: cover;
   background: #050708;
+}
+
+.chat.call-expanded .call-panel {
+  min-height: 0;
+}
+
+.chat.call-expanded .remote-video {
+  height: calc(100vh - 190px);
 }
 
 .local-video {
@@ -416,6 +440,34 @@ label {
   object-fit: cover;
 }
 
+.remote-placeholder {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  inset: 0;
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.call-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  border: 1px solid rgb(215 164 95 / 38%);
+  border-radius: 999px;
+  background: #241c12;
+  color: var(--warm);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 9px;
+}
+
+.local-badge {
+  left: auto;
+  right: 10px;
+}
+
 .call-controls {
   display: flex;
   align-items: center;
@@ -423,14 +475,28 @@ label {
   gap: 12px;
 }
 
-.call-status {
+.call-copy {
+  display: grid;
+  gap: 2px;
   min-width: 0;
+}
+
+.call-status,
+.call-flags {
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call-status {
   color: var(--text);
   font-size: 13px;
   font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.call-flags {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .call-actions {
@@ -443,6 +509,13 @@ label {
 button.icon-button.active {
   border-color: var(--warm);
   color: var(--warm);
+}
+
+.call-event-message {
+  margin-top: 5px;
+  color: var(--warm);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .message {
@@ -718,6 +791,7 @@ button.icon-button.active {
 }
 
 .composer {
+  grid-row: 5;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   position: relative;
@@ -790,6 +864,7 @@ button.icon-button.active {
 }
 
 .selection-bar {
+  grid-row: 5;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
@@ -814,6 +889,7 @@ button.icon-button.active {
 }
 
 .forwarding-bar {
+  grid-row: 4;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;

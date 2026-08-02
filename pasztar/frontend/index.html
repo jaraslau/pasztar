@@ -58,6 +58,18 @@
           d="M14.5 14.5 17 12l4 4-3 3c-5.5-.5-10.5-5.5-11-11l3-3 4 4-2.5 2.5"
         />
       </symbol>
+      <symbol id="icon-minimize" viewBox="0 0 24 24">
+        <path d="M8 3v5H3" />
+        <path d="M21 8h-5V3" />
+        <path d="M3 16h5v5" />
+        <path d="M16 21v-5h5" />
+      </symbol>
+      <symbol id="icon-maximize" viewBox="0 0 24 24">
+        <path d="M3 8V3h5" />
+        <path d="M16 3h5v5" />
+        <path d="M8 21H3v-5" />
+        <path d="M21 16v5h-5" />
+      </symbol>
       <symbol id="icon-play" viewBox="0 0 24 24">
         <path d="m8 5 11 7-11 7V5Z" />
       </symbol>
@@ -130,8 +142,8 @@
               id="start-call"
               type="button"
               class="icon-button"
-              title="Start video call"
-              aria-label="Start video call"
+              title="Start call"
+              aria-label="Start call"
               disabled
             >
               <svg class="icon"><use href="#icon-video"></use></svg>
@@ -148,8 +160,6 @@
           </div>
         </header>
 
-        <div id="messages" class="messages"></div>
-
         <section id="call-panel" class="call-panel" hidden>
           <div class="call-stage">
             <video
@@ -165,9 +175,17 @@
               muted
               playsinline
             ></video>
+            <div id="remote-placeholder" class="remote-placeholder"></div>
+            <span id="remote-muted" class="call-badge" hidden>Muted</span>
+            <span id="local-muted" class="call-badge local-badge" hidden
+              >You muted</span
+            >
           </div>
           <div class="call-controls">
-            <span id="call-status" class="call-status"></span>
+            <div class="call-copy">
+              <span id="call-status" class="call-status"></span>
+              <span id="call-flags" class="call-flags"></span>
+            </div>
             <div class="call-actions">
               <button id="accept-call" type="button" class="secondary">
                 <svg class="icon"><use href="#icon-video"></use></svg>
@@ -201,6 +219,15 @@
                 <svg class="icon"><use href="#icon-video"></use></svg>
               </button>
               <button
+                id="toggle-call-size"
+                type="button"
+                class="icon-button"
+                title="Shrink call"
+                aria-label="Shrink call"
+              >
+                <svg class="icon"><use href="#icon-minimize"></use></svg>
+              </button>
+              <button
                 id="leave-call"
                 type="button"
                 class="icon-button danger-button"
@@ -212,6 +239,8 @@
             </div>
           </div>
         </section>
+
+        <div id="messages" class="messages"></div>
 
         <div id="forwarding-bar" class="forwarding-bar" hidden>
           <span id="forwarding-count" class="forwarding-count"></span>

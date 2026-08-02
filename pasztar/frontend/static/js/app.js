@@ -36,7 +36,10 @@ const state = {
   activeCallPeerId: null,
   callStarting: false,
   callMuted: false,
-  callCameraOff: false,
+  callCameraOff: true,
+  callPeerMuted: false,
+  callPeerCameraOff: true,
+  callCollapsedManual: false,
   callStream: null,
   remoteStream: null,
   peerConnection: null,
@@ -64,12 +67,17 @@ const els = {
   startCall: document.querySelector("#start-call"),
   callPanel: document.querySelector("#call-panel"),
   callStatus: document.querySelector("#call-status"),
+  callFlags: document.querySelector("#call-flags"),
   remoteVideo: document.querySelector("#remote-video"),
   localVideo: document.querySelector("#local-video"),
+  remotePlaceholder: document.querySelector("#remote-placeholder"),
+  remoteMuted: document.querySelector("#remote-muted"),
+  localMuted: document.querySelector("#local-muted"),
   acceptCall: document.querySelector("#accept-call"),
   declineCall: document.querySelector("#decline-call"),
   muteCall: document.querySelector("#mute-call"),
   cameraCall: document.querySelector("#camera-call"),
+  toggleCallSize: document.querySelector("#toggle-call-size"),
   leaveCall: document.querySelector("#leave-call"),
   messages: document.querySelector("#messages"),
   exportIdentity: document.querySelector("#export-identity"),
@@ -185,6 +193,9 @@ async function messageSummary(message) {
   }
   if (payload.kind === "file") {
     return `File: ${payload.name}`;
+  }
+  if (payload.kind === "call_event") {
+    return `Call ${payload.event}`;
   }
   return truncateText(payload.text || "[unable to decrypt]");
 }
@@ -550,22 +561,47 @@ function updateCallUi() {
   updateCallButtons();
   const incoming = state.activeCall ? null : visibleCallForSelected();
   const active = state.activeCall;
+  const allCamerasOff =
+    Boolean(active) && state.callCameraOff && state.callPeerCameraOff;
+  const compact =
+    Boolean(active) && (state.callCollapsedManual || allCamerasOff);
+  const peerName = active ? displayNameForId(state.activeCallPeerId) : "";
   els.callPanel.hidden = !incoming && !active;
   els.acceptCall.hidden = !incoming;
   els.declineCall.hidden = !incoming;
   els.muteCall.hidden = !active;
   els.cameraCall.hidden = !active;
+  els.toggleCallSize.hidden =
+    !active || (allCamerasOff && !state.callCollapsedManual);
   els.leaveCall.hidden = !active;
   els.callPanel.classList.toggle("active-call", Boolean(active));
+  els.callPanel.classList.toggle("compact-call", compact);
+  els.chat.classList.toggle("call-expanded", Boolean(active) && !compact);
+  els.remotePlaceholder.textContent = peerName;
+  els.remotePlaceholder.hidden = !active || !state.callPeerCameraOff || compact;
+  els.localVideo.hidden = !active || state.callCameraOff || compact;
+  els.remoteMuted.hidden = !active || !state.callPeerMuted || compact;
+  els.localMuted.hidden = !active || !state.callMuted || compact;
+  setButtonIcon(els.toggleCallSize, compact ? "maximize" : "minimize");
+  els.toggleCallSize.title = compact ? "Expand call" : "Shrink call";
+  els.toggleCallSize.setAttribute("aria-label", els.toggleCallSize.title);
   if (active) {
-    const name = displayNameForId(state.activeCallPeerId);
     els.callStatus.textContent = callHasPeer(active)
-      ? `In call with ${name}`
-      : `Waiting for ${name}`;
+      ? `In call with ${peerName}`
+      : `Waiting for ${peerName}`;
+    els.callFlags.textContent = [
+      state.callMuted ? "You muted" : "",
+      state.callPeerMuted ? `${peerName} muted` : "",
+      state.callCameraOff ? "Your camera off" : "",
+      state.callPeerCameraOff ? `${peerName} camera off` : "",
+    ]
+      .filter(Boolean)
+      .join(" - ");
     return;
   }
   if (incoming) {
     els.callStatus.textContent = `${displayNameForId(callPeerId(incoming))} is calling`;
+    els.callFlags.textContent = "";
   }
 }
 
@@ -950,6 +986,13 @@ async function decryptMessage(message) {
         mimeType: envelope.mime_type || "application/octet-stream",
       };
     }
+    if (envelope.kind === "call_event") {
+      return {
+        kind: "call_event",
+        forwardedFrom: envelope.forwarded_from || null,
+        event: envelope.event || "started",
+      };
+    }
     return {
       kind: "text",
       forwardedFrom: envelope.forwarded_from || null,
@@ -964,7 +1007,12 @@ async function decryptMessage(message) {
   }
 }
 
-async function postEncryptedMessage(recipient, plaintext, metadata = {}) {
+async function postEncryptedMessage(
+  recipient,
+  plaintext,
+  metadata = {},
+  clearReply = true,
+) {
   if (!recipient) {
     throw new Error("Select a recipient.");
   }
@@ -978,7 +1026,9 @@ async function postEncryptedMessage(recipient, plaintext, metadata = {}) {
   }
   const body = JSON.stringify(payload);
   await apiJson(await signedFetch("/messages", { method: "POST", body }));
-  clearReplyTarget();
+  if (clearReply) {
+    clearReplyTarget();
+  }
 }
 
 async function sendMessage(event) {
@@ -1030,6 +1080,19 @@ async function sendAttachment(file, kind) {
   await loadMessages({ scrollToBottom: true });
 }
 
+async function sendCallEventMessage(eventName, recipient) {
+  if (!recipient) {
+    return;
+  }
+  await postEncryptedMessage(
+    recipient,
+    eventName,
+    { kind: "call_event", event: eventName },
+    false,
+  );
+  await loadMessages({ scrollToBottom: true });
+}
+
 function callPeerClient() {
   return state.clients.find((client) => client.id === state.activeCallPeerId);
 }
@@ -1063,7 +1126,10 @@ function cleanupLocalCall() {
   state.activeCallPeerId = null;
   state.callSignalsSeen.clear();
   state.callMuted = false;
-  state.callCameraOff = false;
+  state.callCameraOff = true;
+  state.callPeerMuted = false;
+  state.callPeerCameraOff = true;
+  state.callCollapsedManual = false;
   updateCallUi();
 }
 
@@ -1079,7 +1145,7 @@ async function ensureCallMedia() {
   }
   state.callStream = await navigator.mediaDevices.getUserMedia({
     audio: true,
-    video: true,
+    video: false,
   });
   els.localVideo.srcObject = state.callStream;
 }
@@ -1092,6 +1158,45 @@ function applyCallTrackState() {
     ?.getVideoTracks()
     .forEach((track) => (track.enabled = !state.callCameraOff));
   updateCallButtons();
+  updateCallUi();
+}
+
+async function enableCamera() {
+  if (!state.callStream || !navigator.mediaDevices?.getUserMedia) {
+    return;
+  }
+  if (state.callStream.getVideoTracks().length === 0) {
+    const videoStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+    });
+    const track = videoStream.getVideoTracks()[0];
+    state.callStream.addTrack(track);
+    if (state.peerConnection) {
+      state.peerConnection.addTrack(track, state.callStream);
+    }
+  }
+  state.callCameraOff = false;
+  els.localVideo.srcObject = state.callStream;
+  applyCallTrackState();
+  await sendCallState();
+  await sendOffer(true);
+}
+
+async function disableCamera() {
+  for (const track of state.callStream?.getVideoTracks() || []) {
+    for (const sender of state.peerConnection?.getSenders() || []) {
+      if (sender.track === track) {
+        state.peerConnection.removeTrack(sender);
+      }
+    }
+    state.callStream.removeTrack(track);
+    track.stop();
+  }
+  state.callCameraOff = true;
+  els.localVideo.srcObject = state.callStream;
+  applyCallTrackState();
+  await sendCallState();
+  await sendOffer(true);
 }
 
 async function sendCallSignal(type, data) {
@@ -1115,6 +1220,13 @@ async function sendCallSignal(type, data) {
       },
     ),
   );
+}
+
+async function sendCallState() {
+  await sendCallSignal("state", {
+    muted: state.callMuted,
+    cameraOff: state.callCameraOff,
+  }).catch(() => null);
 }
 
 async function flushPendingCandidates() {
@@ -1154,9 +1266,12 @@ function createPeerConnection() {
   return pc;
 }
 
-async function sendOffer() {
+async function sendOffer(force = false) {
+  if (!callHasPeer(state.activeCall)) {
+    return;
+  }
   const pc = state.peerConnection || createPeerConnection();
-  if (pc.signalingState !== "stable" || pc.localDescription) {
+  if (pc.signalingState !== "stable" || (!force && pc.localDescription)) {
     return;
   }
   const offer = await pc.createOffer();
@@ -1201,6 +1316,12 @@ async function handleCallSignal(signal) {
     throw new Error("Cannot decrypt call signal.");
   }
   const { type, data } = JSON.parse(payload.text);
+  if (type === "state") {
+    state.callPeerMuted = Boolean(data?.muted);
+    state.callPeerCameraOff = data?.cameraOff !== false;
+    updateCallUi();
+    return;
+  }
   const pc = state.peerConnection || createPeerConnection();
   if (type === "offer") {
     await pc.setRemoteDescription(data);
@@ -1296,6 +1417,7 @@ async function enterCall(call) {
     throw error;
   }
   applyCallTrackState();
+  await sendCallState();
   startCallTimers();
   updateCallUi();
   await ensurePeerConnectionState();
@@ -1305,12 +1427,17 @@ async function enterCall(call) {
 async function loadCalls() {
   state.calls = await apiJson(await signedFetch("/calls"));
   if (state.activeCall) {
+    const hadPeer = callHasPeer(state.activeCall);
     const active = state.calls.find((call) => call.id === state.activeCall.id);
     if (!active || !active.participants.includes(state.identity.clientId)) {
       cleanupLocalCall();
     } else {
       state.activeCall = active;
       await ensurePeerConnectionState();
+      const hasPeer = callHasPeer(active);
+      if (!hadPeer && hasPeer) {
+        await sendCallState();
+      }
       await pollCallSignals();
     }
   }
@@ -1322,17 +1449,19 @@ async function startCall() {
     status("Select another client.", true);
     return;
   }
+  const recipient = state.selected;
   state.callStarting = true;
   updateCallButtons();
   try {
     if (state.activeCall) {
       await leaveCall(true);
     }
-    const body = JSON.stringify({ recipient_id: state.selected.id });
+    const body = JSON.stringify({ recipient_id: recipient.id });
     const call = await apiJson(
       await signedFetch("/calls", { method: "POST", body }),
     );
     await enterCall(call);
+    await sendCallEventMessage("started", recipient);
     status("Call started.");
   } finally {
     state.callStarting = false;
@@ -1366,8 +1495,10 @@ function declineCall() {
 
 async function leaveCall(notify = true) {
   const call = state.activeCall;
+  const recipient = callPeerClient();
   cleanupLocalCall();
   if (notify && call) {
+    await sendCallEventMessage("ended", recipient);
     await apiJson(
       await signedFetch(`/calls/${encodeURIComponent(call.id)}/leave`, {
         method: "POST",
@@ -1468,6 +1599,13 @@ async function encryptForwardedMessage(message, recipient) {
   if (payload.kind === "text") {
     return encryptFor(recipient, payload.text, {
       forwarded_from: forwardedFrom,
+    });
+  }
+  if (payload.kind === "call_event") {
+    return encryptFor(recipient, payload.event, {
+      kind: "call_event",
+      forwarded_from: forwardedFrom,
+      event: payload.event,
     });
   }
   throw new Error("Cannot forward a message that failed to decrypt.");
@@ -1620,6 +1758,12 @@ async function renderForwardedFrom(message) {
 
 async function renderMessageBody(message) {
   const payload = await decryptMessage(message);
+  if (payload.kind === "call_event") {
+    const text = document.createElement("p");
+    text.className = "call-event-message";
+    text.textContent = `${formatMessageTime(messageDate(message))} call ${payload.event}`;
+    return text;
+  }
   if (payload.kind === "image") {
     const wrapper = document.createElement("div");
     const image = document.createElement("img");
@@ -1972,10 +2116,16 @@ els.declineCall.addEventListener("click", declineCall);
 els.muteCall.addEventListener("click", () => {
   state.callMuted = !state.callMuted;
   applyCallTrackState();
+  sendCallState().catch((error) => status(error.message, true));
 });
 els.cameraCall.addEventListener("click", () => {
-  state.callCameraOff = !state.callCameraOff;
-  applyCallTrackState();
+  (state.callCameraOff ? enableCamera() : disableCamera()).catch((error) =>
+    status(error.message, true),
+  );
+});
+els.toggleCallSize.addEventListener("click", () => {
+  state.callCollapsedManual = !state.callCollapsedManual;
+  updateCallUi();
 });
 els.leaveCall.addEventListener("click", () => {
   leaveCall(true).catch((error) => status(error.message, true));
