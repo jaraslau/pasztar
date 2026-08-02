@@ -18,8 +18,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     columns = {
-        column["name"]
-        for column in sa.inspect(op.get_bind()).get_columns("clients")
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns("clients")
     }
     if "encryption_public_key" not in columns:
         op.add_column(
@@ -30,8 +29,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     columns = {
-        column["name"]
-        for column in sa.inspect(op.get_bind()).get_columns("clients")
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns("clients")
     }
     if "encryption_public_key" in columns:
         op.drop_column("clients", "encryption_public_key")

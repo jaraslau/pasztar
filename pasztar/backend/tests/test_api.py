@@ -228,7 +228,9 @@ def test_auth_rejects_unknown_client_bad_signature_and_stale_timestamp():
 
     bad_headers = signed("POST", "/messages", body, "alice", alice_private)
     bad_headers["X-Signature"] = base64.b64encode(b"bad").decode()
-    assert client.post("/messages", content=body, headers=bad_headers).status_code == 401
+    assert (
+        client.post("/messages", content=body, headers=bad_headers).status_code == 401
+    )
 
     stale_headers = signed(
         "POST",
@@ -259,18 +261,24 @@ def test_duplicate_message_id_recipient_isolation_and_limit():
             f'{{"id":"{message_id}","recipient_id":"bob",'
             f'"ciphertext":"opaque-{message_id}"}}'
         ).encode()
-        assert client.post(
-            "/messages",
-            content=body,
-            headers=signed("POST", "/messages", body, "alice", alice_private),
-        ).status_code == 201
+        assert (
+            client.post(
+                "/messages",
+                content=body,
+                headers=signed("POST", "/messages", body, "alice", alice_private),
+            ).status_code
+            == 201
+        )
 
     duplicate = b'{"id":"m1","recipient_id":"bob","ciphertext":"again"}'
-    assert client.post(
-        "/messages",
-        content=duplicate,
-        headers=signed("POST", "/messages", duplicate, "alice", alice_private),
-    ).status_code == 409
+    assert (
+        client.post(
+            "/messages",
+            content=duplicate,
+            headers=signed("POST", "/messages", duplicate, "alice", alice_private),
+        ).status_code
+        == 409
+    )
 
     bob_headers = signed("GET", "/messages?limit=2", b"", "bob", bob_private)
     bob_messages = client.get("/messages?limit=2", headers=bob_headers)

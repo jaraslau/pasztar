@@ -14,7 +14,9 @@ from backend.schemas.messages import MessageCreate, MessageOut
 router = APIRouter()
 
 
-@router.post("/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED
+)
 def create_message(
     payload: MessageCreate,
     db: Session = Depends(get_db),
@@ -34,7 +36,9 @@ def create_message(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "message id already exists") from exc
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "message id already exists"
+        ) from exc
 
     db.refresh(message)
     events.publish("messages")
