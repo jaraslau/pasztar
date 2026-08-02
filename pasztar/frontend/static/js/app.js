@@ -2,6 +2,8 @@ const storeKey = "pasztar.identity";
 const pendingKey = "pasztar.pendingIdentity";
 const selectedKey = "pasztar.selectedClient";
 const maxRecordingMs = 60000;
+const maxAttachmentBytes = 10 * 1024 * 1024;
+const maxImageDimension = 1600;
 const eventReconnectBaseMs = 2000;
 const eventReconnectMaxMs = 30000;
 const encoder = new TextEncoder();
@@ -49,7 +51,13 @@ const els = {
   messageForm: document.querySelector("#message-form"),
   messageText: document.querySelector("#message-text"),
   sendText: document.querySelector("#send-text"),
+  openAttachments: document.querySelector("#open-attachments"),
+  attachmentMenu: document.querySelector("#attachment-menu"),
   recordVoice: document.querySelector("#record-voice"),
+  pickImage: document.querySelector("#pick-image"),
+  pickFile: document.querySelector("#pick-file"),
+  imageInput: document.querySelector("#image-input"),
+  fileInput: document.querySelector("#file-input"),
   voiceControls: document.querySelector("#voice-controls"),
   voiceTimer: document.querySelector("#voice-timer"),
   cancelVoice: document.querySelector("#cancel-voice"),
@@ -146,6 +154,12 @@ async function messageSummary(message) {
   if (payload.kind === "voice") {
     return "Voice message";
   }
+  if (payload.kind === "image") {
+    return `Image: ${payload.name}`;
+  }
+  if (payload.kind === "file") {
+    return `File: ${payload.name}`;
+  }
   return truncateText(payload.text || "[unable to decrypt]");
 }
 
@@ -180,6 +194,15 @@ async function setReplyTarget(message) {
 function closeContextMenu() {
   state.contextMenu?.remove();
   state.contextMenu = null;
+}
+
+function setAttachmentMenu(open) {
+  els.attachmentMenu.hidden = !open;
+  els.openAttachments.setAttribute("aria-expanded", String(open));
+}
+
+function closeAttachmentMenu() {
+  setAttachmentMenu(false);
 }
 
 function updateSelectionUi() {
@@ -569,6 +592,7 @@ function recordingMimeType() {
 }
 
 async function startVoiceRecording() {
+  closeAttachmentMenu();
   if (!state.selected) {
     status("Select a recipient.", true);
     return;
@@ -662,6 +686,53 @@ async function finishVoiceRecording(recording) {
   );
 }
 
+function attachmentName(name, fallback) {
+  const trimmed = (name || "").trim();
+  return trimmed || fallback;
+}
+
+function compressedImageName(name) {
+  return attachmentName(name, "image.jpg").replace(/\.[^.]*$/, "") + ".jpg";
+}
+
+async function compressImage(file) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(
+    1,
+    maxImageDimension / Math.max(bitmap.width, bitmap.height),
+  );
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.82),
+  );
+  if (!blob) {
+    throw new Error("Could not compress image.");
+  }
+  return {
+    blob,
+    name: compressedImageName(file.name),
+    mimeType: "image/jpeg",
+  };
+}
+
+async function prepareAttachment(file, kind) {
+  if (kind === "image") {
+    return compressImage(file);
+  }
+  return {
+    blob: file,
+    name: attachmentName(file.name, "attachment"),
+    mimeType: file.type || "application/octet-stream",
+  };
+}
+
 async function encryptFor(recipient, plaintext, metadata = {}) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await crypto.subtle.deriveKey(
@@ -702,10 +773,7 @@ async function decryptMessage(message) {
       return {
         kind: "error",
         forwardedFrom: envelope.forwarded_from || null,
-        text:
-          envelope.kind === "voice"
-            ? "[unable to decrypt voice message]"
-            : "[unable to decrypt]",
+        text: `[unable to decrypt ${envelope.kind || "message"}]`,
       };
     }
     const key = await crypto.subtle.deriveKey(
@@ -729,6 +797,15 @@ async function decryptMessage(message) {
         mimeType: envelope.mime_type || "audio/webm",
       };
     }
+    if (envelope.kind === "image" || envelope.kind === "file") {
+      return {
+        kind: envelope.kind,
+        forwardedFrom: envelope.forwarded_from || null,
+        data: plaintext,
+        name: attachmentName(envelope.name, envelope.kind),
+        mimeType: envelope.mime_type || "application/octet-stream",
+      };
+    }
     return {
       kind: "text",
       forwardedFrom: envelope.forwarded_from || null,
@@ -738,53 +815,19 @@ async function decryptMessage(message) {
     return {
       kind: "error",
       forwardedFrom: envelope?.forwarded_from || null,
-      text:
-        envelope?.kind === "voice"
-          ? "[unable to decrypt voice message]"
-          : "[unable to decrypt]",
+      text: `[unable to decrypt ${envelope?.kind || "message"}]`,
     };
   }
 }
 
-async function sendMessage(event) {
-  event.preventDefault();
-  if (!state.selected) {
-    status("Select a recipient.", true);
-    return;
+async function postEncryptedMessage(recipient, plaintext, metadata = {}) {
+  if (!recipient) {
+    throw new Error("Select a recipient.");
   }
-  const text = els.messageText.value.trim();
-  if (!text) {
-    return;
-  }
-  const payload = {
-    id: crypto.randomUUID(),
-    recipient_id: state.selected.id,
-    ciphertext: await encryptFor(state.selected, text),
-  };
-  if (state.replyTarget && peerId(state.replyTarget) === state.selected.id) {
-    payload.reply_to_id = state.replyTarget.id;
-  }
-  const body = JSON.stringify(payload);
-  await apiJson(await signedFetch("/messages", { method: "POST", body }));
-  els.messageText.value = "";
-  clearReplyTarget();
-  resizeMessageText();
-  await loadMessages({ scrollToBottom: true });
-}
-
-async function sendVoiceMessage(blob, durationMs, recipient) {
   const payload = {
     id: crypto.randomUUID(),
     recipient_id: recipient.id,
-    ciphertext: await encryptFor(
-      recipient,
-      new Uint8Array(await blob.arrayBuffer()),
-      {
-        kind: "voice",
-        mime_type: blob.type || "audio/webm",
-        duration_ms: Math.round(durationMs),
-      },
-    ),
+    ciphertext: await encryptFor(recipient, plaintext, metadata),
   };
   if (state.replyTarget && peerId(state.replyTarget) === recipient.id) {
     payload.reply_to_id = state.replyTarget.id;
@@ -792,7 +835,54 @@ async function sendVoiceMessage(blob, durationMs, recipient) {
   const body = JSON.stringify(payload);
   await apiJson(await signedFetch("/messages", { method: "POST", body }));
   clearReplyTarget();
+}
+
+async function sendMessage(event) {
+  event.preventDefault();
+  const text = els.messageText.value.trim();
+  if (!text) {
+    return;
+  }
+  await postEncryptedMessage(state.selected, text);
+  els.messageText.value = "";
+  resizeMessageText();
+  await loadMessages({ scrollToBottom: true });
+}
+
+async function sendVoiceMessage(blob, durationMs, recipient) {
+  await postEncryptedMessage(
+    recipient,
+    new Uint8Array(await blob.arrayBuffer()),
+    {
+      kind: "voice",
+      mime_type: blob.type || "audio/webm",
+      duration_ms: Math.round(durationMs),
+    },
+  );
   status("Voice message sent.");
+  await loadMessages({ scrollToBottom: true });
+}
+
+async function sendAttachment(file, kind) {
+  const recipient = state.selected;
+  if (!recipient) {
+    status("Select a recipient.", true);
+    return;
+  }
+  const attachment = await prepareAttachment(file, kind);
+  if (attachment.blob.size > maxAttachmentBytes) {
+    throw new Error("Attachment is too large.");
+  }
+  await postEncryptedMessage(
+    recipient,
+    new Uint8Array(await attachment.blob.arrayBuffer()),
+    {
+      kind,
+      name: attachment.name,
+      mime_type: attachment.mimeType,
+    },
+  );
+  status(`${kind === "image" ? "Image" : "File"} sent.`);
   await loadMessages({ scrollToBottom: true });
 }
 
@@ -876,12 +966,39 @@ async function encryptForwardedMessage(message, recipient) {
       duration_ms: Math.round(payload.durationMs),
     });
   }
+  if (payload.kind === "image" || payload.kind === "file") {
+    return encryptFor(recipient, new Uint8Array(payload.data), {
+      kind: payload.kind,
+      forwarded_from: forwardedFrom,
+      name: payload.name,
+      mime_type: payload.mimeType,
+    });
+  }
   if (payload.kind === "text") {
     return encryptFor(recipient, payload.text, {
       forwarded_from: forwardedFrom,
     });
   }
   throw new Error("Cannot forward a message that failed to decrypt.");
+}
+
+function downloadAttachment(payload) {
+  const blob = new Blob([payload.data], { type: payload.mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = payload.name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function iconNode(icon) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  svg.classList.add("icon");
+  use.setAttribute("href", `#icon-${icon}`);
+  svg.append(use);
+  return svg;
 }
 
 async function forwardMessagesTo(recipient) {
@@ -1012,6 +1129,35 @@ async function renderForwardedFrom(message) {
 
 async function renderMessageBody(message) {
   const payload = await decryptMessage(message);
+  if (payload.kind === "image") {
+    const wrapper = document.createElement("div");
+    const image = document.createElement("img");
+    const button = document.createElement("button");
+    const blob = new Blob([payload.data], { type: payload.mimeType });
+    const url = URL.createObjectURL(blob);
+    wrapper.className = "image-attachment";
+    image.src = url;
+    image.alt = payload.name;
+    button.type = "button";
+    button.className = "attachment-download";
+    const name = document.createElement("span");
+    name.textContent = payload.name;
+    button.append(iconNode("download"), name);
+    button.addEventListener("click", () => downloadAttachment(payload));
+    state.voiceStops.add(() => URL.revokeObjectURL(url));
+    wrapper.append(image, button);
+    return wrapper;
+  }
+  if (payload.kind === "file") {
+    const button = document.createElement("button");
+    const name = document.createElement("span");
+    button.type = "button";
+    button.className = "file-attachment";
+    name.textContent = payload.name;
+    button.append(iconNode("file"), name, iconNode("download"));
+    button.addEventListener("click", () => downloadAttachment(payload));
+    return button;
+  }
   if (payload.kind === "voice") {
     let buffer;
     try {
@@ -1319,10 +1465,14 @@ els.settingsModal.addEventListener("click", (event) => {
     closeSettings();
   }
 });
-document.addEventListener("click", closeContextMenu);
+document.addEventListener("click", () => {
+  closeContextMenu();
+  closeAttachmentMenu();
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeContextMenu();
+    closeAttachmentMenu();
     if (state.forwardingMessages.length > 0) {
       cancelForwarding();
     } else if (state.selectedMessageIds.size > 0) {
@@ -1333,6 +1483,13 @@ document.addEventListener("keydown", (event) => {
   }
 });
 els.messages.addEventListener("scroll", closeContextMenu);
+els.openAttachments.addEventListener("click", (event) => {
+  event.stopPropagation();
+  setAttachmentMenu(els.attachmentMenu.hidden);
+});
+els.attachmentMenu.addEventListener("click", (event) => {
+  event.stopPropagation();
+});
 els.cancelSelection.addEventListener("click", exitSelection);
 els.deleteSelected.addEventListener("click", () => {
   deleteSelectedMessages().catch((error) => status(error.message, true));
@@ -1351,6 +1508,28 @@ els.messageForm.addEventListener("submit", (event) => {
 els.messageText.addEventListener("input", resizeMessageText);
 els.recordVoice.addEventListener("click", () => {
   startVoiceRecording().catch((error) => status(error.message, true));
+});
+els.pickImage.addEventListener("click", () => {
+  closeAttachmentMenu();
+  els.imageInput.click();
+});
+els.pickFile.addEventListener("click", () => {
+  closeAttachmentMenu();
+  els.fileInput.click();
+});
+els.imageInput.addEventListener("change", () => {
+  const file = els.imageInput.files?.[0];
+  els.imageInput.value = "";
+  if (file) {
+    sendAttachment(file, "image").catch((error) => status(error.message, true));
+  }
+});
+els.fileInput.addEventListener("change", () => {
+  const file = els.fileInput.files?.[0];
+  els.fileInput.value = "";
+  if (file) {
+    sendAttachment(file, "file").catch((error) => status(error.message, true));
+  }
 });
 els.cancelVoice.addEventListener("click", () => {
   stopVoiceRecording(false);
