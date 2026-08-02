@@ -671,6 +671,7 @@ label {
 }
 
 .attachment-picker {
+  display: grid;
   position: relative;
   width: 38px;
 }
