@@ -619,6 +619,16 @@ button.icon-button.active {
   color: var(--warm);
 }
 
+#refresh-clients.refreshing .icon {
+  animation: refresh-spin 0.8s linear infinite;
+}
+
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .day-divider {
   display: grid;
   grid-template-columns: minmax(20px, 1fr) auto minmax(20px, 1fr);

@@ -111,12 +111,14 @@ async function refresh() {
     return;
   }
   state.refreshing = true;
+  els.refreshClients.classList.add("refreshing");
   try {
     await loadClients();
     await loadMessages();
     await loadCalls();
   } finally {
     state.refreshing = false;
+    els.refreshClients.classList.remove("refreshing");
   }
 }
 
