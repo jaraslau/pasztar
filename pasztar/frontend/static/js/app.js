@@ -124,6 +124,7 @@ async function handleEvent(eventName) {
   if (eventName === "ready") {
     state.eventReconnectMs = eventReconnectBaseMs;
     status("Event stream connected.");
+    await refresh();
   }
   if (eventName === "clients") {
     await refresh();

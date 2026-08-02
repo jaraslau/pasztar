@@ -7,7 +7,6 @@ export const maxImageDimension = 1600;
 export const eventReconnectBaseMs = 2000;
 export const eventReconnectMaxMs = 30000;
 export const callHeartbeatMs = 10000;
-export const callSignalPollMs = 2000;
 export const encoder = new TextEncoder();
 export const decoder = new TextDecoder();
 
@@ -31,6 +30,8 @@ export const state = {
   forwardingMessages: [],
   forwardingSending: false,
   calls: [],
+  callConfigLoaded: false,
+  callIceServers: [],
   declinedCallIds: new Set(),
   activeCall: null,
   activeCallPeerId: null,
@@ -43,10 +44,13 @@ export const state = {
   callStream: null,
   remoteStream: null,
   peerConnection: null,
+  callMakingOffer: false,
+  callIgnoreOffer: false,
+  callRestarting: false,
+  callReconnectTimer: null,
   callSignalsSeen: new Set(),
   callPendingCandidates: [],
   callHeartbeat: null,
-  callSignalPoll: null,
 };
 
 export const savedIdentity = localStorage.getItem(storeKey);

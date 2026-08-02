@@ -17,6 +17,7 @@ from backend.app import app
 from backend.core.db.models import Base
 from backend.core.db.session import get_db
 from backend.core.signing import signature_payload
+from backend.core.settings import settings
 from backend.routers import clients as clients_router
 from backend.schemas.messages import MAX_CIPHERTEXT_LENGTH, MessageCreate
 
@@ -357,6 +358,13 @@ def test_call_visibility_and_signals_are_limited_to_chat_participants():
     assert bob_signals.status_code == 200
     assert [item["ciphertext"] for item in bob_signals.json()] == ["opaque-signal"]
 
+    delivered = client.get(
+        f"/calls/{call_id}/signals",
+        headers=signed("GET", f"/calls/{call_id}/signals", b"", "bob", bob_private),
+    )
+    assert delivered.status_code == 200
+    assert delivered.json() == []
+
     charlie_signals = client.get(
         f"/calls/{call_id}/signals",
         headers=signed(
@@ -364,6 +372,26 @@ def test_call_visibility_and_signals_are_limited_to_chat_participants():
         ),
     )
     assert charlie_signals.status_code == 404
+
+
+def test_call_config_exposes_ice_servers(monkeypatch: pytest.MonkeyPatch):
+    alice_private, alice_public = keypair()
+    register_client("alice", "Alice", alice_public)
+    monkeypatch.setattr(
+        settings,
+        "call_ice_servers",
+        [{"urls": "turn:turn.example.test:3478", "username": "u"}],
+    )
+
+    response = client.get(
+        "/calls/config",
+        headers=signed("GET", "/calls/config", b"", "alice", alice_private),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ice_servers": [{"urls": "turn:turn.example.test:3478", "username": "u"}]
+    }
 
 
 def test_message_ciphertext_limit_is_generous_but_bounded():

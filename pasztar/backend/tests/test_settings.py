@@ -19,6 +19,7 @@ def test_settings_loads_env_file(
         "APP_PORT",
         "DEBUG_MODE",
         "SIGNATURE_MAX_SKEW_SECONDS",
+        "CALL_ICE_SERVERS",
     ]:
         monkeypatch.delenv(key, raising=False)
 
@@ -31,6 +32,7 @@ def test_settings_loads_env_file(
                 "APP_PORT=9000",
                 "DEBUG_MODE=true",
                 "SIGNATURE_MAX_SKEW_SECONDS=42",
+                'CALL_ICE_SERVERS=[{"urls":"stun:stun.example.test:3478"}]',
                 "EXTRA_VALUE=ignored",
             ]
         )
@@ -43,6 +45,7 @@ def test_settings_loads_env_file(
     assert settings.app_port == 9000
     assert settings.debug_mode is True
     assert settings.signature_max_skew_seconds == 42
+    assert settings.call_ice_servers == [{"urls": "stun:stun.example.test:3478"}]
 
 
 def test_settings_requires_database_url(monkeypatch: pytest.MonkeyPatch):

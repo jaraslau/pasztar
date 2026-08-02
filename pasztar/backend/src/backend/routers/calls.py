@@ -10,10 +10,18 @@ from backend.core.auth import require_client
 from backend.core.db.models import Call, CallParticipant, CallSignal, Client, now
 from backend.core.db.session import get_db
 from backend.core.events import events
-from backend.schemas.calls import CallCreate, CallOut, CallSignalCreate, CallSignalOut
+from backend.core.settings import settings
+from backend.schemas.calls import (
+    CallConfigOut,
+    CallCreate,
+    CallOut,
+    CallSignalCreate,
+    CallSignalOut,
+)
 
 router = APIRouter()
 CALL_STALE_AFTER = timedelta(seconds=45)
+CALL_SIGNAL_STALE_AFTER = timedelta(minutes=10)
 
 
 def call_pair(first: str, second: str) -> tuple[str, str]:
@@ -76,6 +84,11 @@ def end_empty_calls(db: Session, call_ids: set[str]) -> None:
 
 
 def prune_stale_calls(db: Session) -> None:
+    pruned = db.execute(
+        delete(CallSignal).where(
+            CallSignal.created_at < now() - CALL_SIGNAL_STALE_AFTER
+        )
+    ).rowcount
     stale = list(
         db.scalars(
             select(CallParticipant).where(
@@ -84,6 +97,8 @@ def prune_stale_calls(db: Session) -> None:
         )
     )
     if not stale:
+        if pruned:
+            db.commit()
         return
     call_ids = {participant.call_id for participant in stale}
     for participant in stale:
@@ -137,6 +152,11 @@ def clear_signals_for(db: Session, call_id: str, client_id: str) -> None:
             CallSignal.recipient_id == client_id,
         )
     )
+
+
+@router.get("/calls/config", response_model=CallConfigOut)
+def call_config(_: Client = Depends(require_client)) -> CallConfigOut:
+    return CallConfigOut(ice_servers=settings.call_ice_servers)
 
 
 @router.post("/calls", response_model=CallOut, status_code=status.HTTP_201_CREATED)
@@ -293,11 +313,11 @@ def list_signals(
     call_id: str,
     db: Session = Depends(get_db),
     client: Client = Depends(require_client),
-) -> list[CallSignal]:
+) -> list[CallSignalOut]:
     visible_active_call(db, call_id, client.id)
     if db.get(CallParticipant, {"call_id": call_id, "client_id": client.id}) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not in call")
-    return list(
+    signals = list(
         db.scalars(
             select(CallSignal)
             .where(
@@ -309,3 +329,9 @@ def list_signals(
             .order_by(CallSignal.created_at, CallSignal.id)
         )
     )
+    response = [CallSignalOut.model_validate(signal) for signal in signals]
+    for signal in signals:
+        db.delete(signal)
+    if signals:
+        db.commit()
+    return response

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,6 +21,10 @@ class CallOut(BaseModel):
     created_at: datetime
     ended_at: datetime | None
     participants: list[str]
+
+
+class CallConfigOut(BaseModel):
+    ice_servers: list[dict[str, Any]]
 
 
 class CallSignalCreate(BaseModel):

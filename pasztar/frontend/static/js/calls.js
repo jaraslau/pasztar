@@ -1,6 +1,5 @@
 import {
   callHeartbeatMs,
-  callSignalPollMs,
   displayNameForId,
   els,
   setButtonIcon,
@@ -47,6 +46,22 @@ export function isCallOfferer() {
     state.activeCallPeerId &&
     state.identity.clientId.localeCompare(state.activeCallPeerId) < 0
   );
+}
+
+export function isPolitePeer() {
+  return (
+    state.activeCallPeerId &&
+    state.identity.clientId.localeCompare(state.activeCallPeerId) > 0
+  );
+}
+
+export async function loadCallConfig() {
+  if (state.callConfigLoaded) {
+    return;
+  }
+  const config = await apiJson(await signedFetch("/calls/config"));
+  state.callIceServers = config.ice_servers || [];
+  state.callConfigLoaded = true;
 }
 
 export function updateCallButtons() {
@@ -124,6 +139,8 @@ export function closePeerConnection() {
   state.peerConnection?.close();
   state.peerConnection = null;
   state.remoteStream = null;
+  state.callMakingOffer = false;
+  state.callIgnoreOffer = false;
   state.callPendingCandidates = [];
   els.remoteVideo.srcObject = null;
 }
@@ -136,9 +153,9 @@ export function stopCallMedia() {
 
 export function clearCallTimers() {
   clearInterval(state.callHeartbeat);
-  clearInterval(state.callSignalPoll);
+  clearTimeout(state.callReconnectTimer);
   state.callHeartbeat = null;
-  state.callSignalPoll = null;
+  state.callReconnectTimer = null;
 }
 
 export function cleanupLocalCall() {
@@ -153,6 +170,7 @@ export function cleanupLocalCall() {
   state.callPeerMuted = false;
   state.callPeerCameraOff = true;
   state.callCollapsedManual = false;
+  state.callRestarting = false;
   updateCallUi();
 }
 
@@ -259,9 +277,40 @@ export async function flushPendingCandidates() {
   }
 }
 
+export function scheduleCallReconnect(pc = state.peerConnection, delay = 1200) {
+  if (!state.activeCall || state.callReconnectTimer) {
+    return;
+  }
+  state.callReconnectTimer = setTimeout(() => {
+    state.callReconnectTimer = null;
+    if (!state.activeCall || (pc && state.peerConnection !== pc)) {
+      return;
+    }
+    reconnectCall().catch((error) => status(error.message, true));
+  }, delay);
+}
+
+export async function reconnectCall() {
+  if (state.callRestarting || !callHasPeer(state.activeCall)) {
+    return;
+  }
+  state.callRestarting = true;
+  try {
+    status("Reconnecting call.");
+    closePeerConnection();
+    createPeerConnection();
+    await sendCallState();
+    if (isCallOfferer()) {
+      await sendOffer(true, true);
+    }
+  } finally {
+    state.callRestarting = false;
+  }
+}
+
 export function createPeerConnection() {
   closePeerConnection();
-  const pc = new RTCPeerConnection({ iceServers: [] });
+  const pc = new RTCPeerConnection({ iceServers: state.callIceServers });
   const remote = new MediaStream();
   state.peerConnection = pc;
   state.remoteStream = remote;
@@ -281,15 +330,26 @@ export function createPeerConnection() {
       );
     }
   });
+  pc.addEventListener("negotiationneeded", () => {
+    sendOffer().catch((error) => status(error.message, true));
+  });
   pc.addEventListener("connectionstatechange", () => {
     if (pc.connectionState === "failed") {
-      status("Call connection failed.", true);
+      scheduleCallReconnect(pc);
+    }
+  });
+  pc.addEventListener("iceconnectionstatechange", () => {
+    if (pc.iceConnectionState === "failed") {
+      scheduleCallReconnect(pc);
+    }
+    if (pc.iceConnectionState === "disconnected") {
+      scheduleCallReconnect(pc, 5000);
     }
   });
   return pc;
 }
 
-export async function sendOffer(force = false) {
+export async function sendOffer(force = false, iceRestart = false) {
   if (!callHasPeer(state.activeCall)) {
     return;
   }
@@ -297,9 +357,14 @@ export async function sendOffer(force = false) {
   if (pc.signalingState !== "stable" || (!force && pc.localDescription)) {
     return;
   }
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  await sendCallSignal("offer", pc.localDescription);
+  state.callMakingOffer = true;
+  try {
+    const offer = await pc.createOffer(iceRestart ? { iceRestart: true } : {});
+    await pc.setLocalDescription(offer);
+    await sendCallSignal("offer", pc.localDescription);
+  } finally {
+    state.callMakingOffer = false;
+  }
 }
 
 export async function ensurePeerConnectionState() {
@@ -347,6 +412,15 @@ export async function handleCallSignal(signal) {
   }
   const pc = state.peerConnection || createPeerConnection();
   if (type === "offer") {
+    const collision = state.callMakingOffer || pc.signalingState !== "stable";
+    state.callIgnoreOffer = !isPolitePeer() && collision;
+    if (state.callIgnoreOffer) {
+      return;
+    }
+    if (collision) {
+      await pc.setLocalDescription({ type: "rollback" });
+    }
+    state.callIgnoreOffer = false;
     await pc.setRemoteDescription(data);
     await flushPendingCandidates();
     const answer = await pc.createAnswer();
@@ -363,10 +437,16 @@ export async function handleCallSignal(signal) {
   }
   if (type === "candidate") {
     const candidate = new RTCIceCandidate(data);
-    if (pc.remoteDescription) {
-      await pc.addIceCandidate(candidate);
-    } else {
-      state.callPendingCandidates.push(candidate);
+    try {
+      if (pc.remoteDescription) {
+        await pc.addIceCandidate(candidate);
+      } else {
+        state.callPendingCandidates.push(candidate);
+      }
+    } catch (error) {
+      if (!state.callIgnoreOffer) {
+        throw error;
+      }
     }
   }
 }
@@ -408,9 +488,6 @@ export function startCallTimers() {
         status(error.message, true);
       });
   }, callHeartbeatMs);
-  state.callSignalPoll = setInterval(() => {
-    pollCallSignals().catch((error) => status(error.message, true));
-  }, callSignalPollMs);
 }
 
 export async function enterCall(call) {
@@ -424,6 +501,7 @@ export async function enterCall(call) {
   state.callPendingCandidates = [];
   state.callMuted = false;
   state.callCameraOff = true;
+  await loadCallConfig();
   try {
     await ensureCallMedia();
   } catch (error) {

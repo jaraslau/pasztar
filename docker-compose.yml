@@ -22,6 +22,23 @@ services:
     depends_on:
       - api
 
+  turn:
+    image: coturn/coturn:latest
+    command:
+      - -n
+      - --log-file=stdout
+      - --lt-cred-mech
+      - --realm=${TURN_REALM}
+      - --user=${TURN_USER}:${TURN_PASSWORD}
+      - --listening-port=3478
+      - --min-port=${TURN_RELAY_PORT_MIN}
+      - --max-port=${TURN_RELAY_PORT_MAX}
+      - --external-ip=${TURN_EXTERNAL_IP}
+    ports:
+      - "${TURN_PORT}:3478/tcp"
+      - "${TURN_PORT}:3478/udp"
+      - "${TURN_RELAY_PORT_MIN}-${TURN_RELAY_PORT_MAX}:${TURN_RELAY_PORT_MIN}-${TURN_RELAY_PORT_MAX}/udp"
+
   db:
     image: postgres:16-alpine
     env_file:
