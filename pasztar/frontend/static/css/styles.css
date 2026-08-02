@@ -479,6 +479,7 @@ label {
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
+  position: relative;
   gap: 12px;
   padding: 14px 24px 16px;
   border-top: 1px solid var(--line);
@@ -497,15 +498,17 @@ label {
 .voice-controls {
   display: flex;
   align-items: center;
-  justify-self: end;
+  position: absolute;
+  right: 24px;
+  bottom: calc(100% + 10px);
   gap: 8px;
-  grid-column: 1 / -1;
   width: fit-content;
   border: 1px solid rgb(228 93 93 / 34%);
   border-radius: 8px;
   background: #22191a;
   padding: 8px;
   box-shadow: 0 -8px 24px rgb(0 0 0 / 22%);
+  z-index: 2;
 }
 
 .voice-controls[hidden] {
@@ -548,6 +551,7 @@ label {
   }
 
   .voice-controls {
+    right: 12px;
     justify-content: end;
   }
 
