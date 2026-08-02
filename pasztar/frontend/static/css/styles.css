@@ -380,6 +380,40 @@ label {
   overflow-wrap: anywhere;
 }
 
+.context-menu {
+  position: fixed;
+  display: grid;
+  gap: 4px;
+  min-width: 132px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 6px;
+  z-index: 20;
+}
+
+.context-menu-item {
+  width: 100%;
+  justify-content: start;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.context-menu-item:hover {
+  background: var(--panel-raised);
+}
+
+.danger-item {
+  color: var(--danger);
+}
+
+.danger-item:hover {
+  background: #2b191a;
+}
+
 .voice-player {
   display: grid;
   grid-template-columns: 38px 34px minmax(120px, 1fr) auto 34px;

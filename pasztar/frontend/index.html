@@ -10,7 +10,9 @@
     <svg class="icon-defs" aria-hidden="true">
       <symbol id="icon-cog" viewBox="0 0 24 24">
         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
-        <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.06.06a2.1 2.1 0 0 1-2.97 2.97l-.06-.06a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.08 1.65V21a2.1 2.1 0 0 1-4.2 0v-.09a1.8 1.8 0 0 0-1.17-1.65 1.8 1.8 0 0 0-1.98.36l-.06.06a2.1 2.1 0 0 1-2.97-2.97l.06-.06a1.8 1.8 0 0 0 .36-1.98 1.8 1.8 0 0 0-1.65-1.08H3a2.1 2.1 0 0 1 0-4.2h.09a1.8 1.8 0 0 0 1.65-1.17 1.8 1.8 0 0 0-.36-1.98l-.06-.06a2.1 2.1 0 1 1 2.97-2.97l.06.06a1.8 1.8 0 0 0 1.98.36h.09A1.8 1.8 0 0 0 10.5 3V3a2.1 2.1 0 0 1 4.2 0v.09a1.8 1.8 0 0 0 1.08 1.65 1.8 1.8 0 0 0 1.98-.36l.06-.06a2.1 2.1 0 0 1 2.97 2.97l-.06.06a1.8 1.8 0 0 0-.36 1.98v.09A1.8 1.8 0 0 0 21 10.5H21a2.1 2.1 0 0 1 0 4.2h-.09A1.8 1.8 0 0 0 19.4 15Z" />
+        <path
+          d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.06.06a2.1 2.1 0 0 1-2.97 2.97l-.06-.06a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.08 1.65V21a2.1 2.1 0 0 1-4.2 0v-.09a1.8 1.8 0 0 0-1.17-1.65 1.8 1.8 0 0 0-1.98.36l-.06.06a2.1 2.1 0 0 1-2.97-2.97l.06-.06a1.8 1.8 0 0 0 .36-1.98 1.8 1.8 0 0 0-1.65-1.08H3a2.1 2.1 0 0 1 0-4.2h.09a1.8 1.8 0 0 0 1.65-1.17 1.8 1.8 0 0 0-.36-1.98l-.06-.06a2.1 2.1 0 1 1 2.97-2.97l.06.06a1.8 1.8 0 0 0 1.98.36h.09A1.8 1.8 0 0 0 10.5 3V3a2.1 2.1 0 0 1 4.2 0v.09a1.8 1.8 0 0 0 1.08 1.65 1.8 1.8 0 0 0 1.98-.36l.06-.06a2.1 2.1 0 0 1 2.97 2.97l-.06.06a1.8 1.8 0 0 0-.36 1.98v.09A1.8 1.8 0 0 0 21 10.5H21a2.1 2.1 0 0 1 0 4.2h-.09A1.8 1.8 0 0 0 19.4 15Z"
+        />
       </symbol>
       <symbol id="icon-refresh" viewBox="0 0 24 24">
         <path d="M20 12a8 8 0 0 1-14.93 4" />
@@ -52,6 +54,13 @@
         <path d="M18 6 6 18" />
         <path d="m6 6 12 12" />
       </symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24">
+        <path d="M3 6h18" />
+        <path d="M8 6V4h8v2" />
+        <path d="M19 6l-1 15H6L5 6" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+      </symbol>
     </svg>
 
     <main class="shell">
@@ -59,7 +68,13 @@
         <section class="panel clients-panel">
           <div class="section-head">
             <h2>Clients</h2>
-            <button id="refresh-clients" type="button" class="icon-button" title="Refresh clients" aria-label="Refresh clients">
+            <button
+              id="refresh-clients"
+              type="button"
+              class="icon-button"
+              title="Refresh clients"
+              aria-label="Refresh clients"
+            >
               <svg class="icon"><use href="#icon-refresh"></use></svg>
             </button>
           </div>
@@ -75,7 +90,13 @@
             <h2 id="chat-title">Select a client</h2>
           </div>
           <div class="actions">
-            <button id="open-settings" type="button" class="icon-button" title="Settings" aria-label="Settings">
+            <button
+              id="open-settings"
+              type="button"
+              class="icon-button"
+              title="Settings"
+              aria-label="Settings"
+            >
               <svg class="icon"><use href="#icon-cog"></use></svg>
             </button>
           </div>
@@ -86,18 +107,47 @@
         <form id="message-form" class="composer">
           <div id="voice-controls" class="voice-controls" hidden>
             <span id="voice-timer" class="voice-timer">0:00</span>
-            <button id="cancel-voice" type="button" class="icon-button" title="Cancel voice message" aria-label="Cancel voice message">
+            <button
+              id="cancel-voice"
+              type="button"
+              class="icon-button"
+              title="Cancel voice message"
+              aria-label="Cancel voice message"
+            >
               <svg class="icon"><use href="#icon-x"></use></svg>
             </button>
-            <button id="send-voice" type="button" class="send-button" title="Send voice message" aria-label="Send voice message">
+            <button
+              id="send-voice"
+              type="button"
+              class="send-button"
+              title="Send voice message"
+              aria-label="Send voice message"
+            >
               <svg class="icon"><use href="#icon-send"></use></svg>
             </button>
           </div>
-          <textarea id="message-text" rows="3" placeholder="Message" required></textarea>
-          <button id="record-voice" type="button" class="icon-button" title="Record voice" aria-label="Record voice">
+          <textarea
+            id="message-text"
+            rows="3"
+            placeholder="Message"
+            required
+          ></textarea>
+          <button
+            id="record-voice"
+            type="button"
+            class="icon-button"
+            title="Record voice"
+            aria-label="Record voice"
+          >
             <svg class="icon"><use href="#icon-mic"></use></svg>
           </button>
-          <button id="send-text" type="submit" class="send-button" title="Send" aria-label="Send">
+          <button
+            id="send-text"
+            type="submit"
+            class="send-button"
+            title="Send"
+            aria-label="Send"
+          >
             <svg class="icon"><use href="#icon-send"></use></svg>
           </button>
         </form>
@@ -107,7 +157,13 @@
     <dialog id="settings-modal" class="modal">
       <div class="modal-head">
         <h2>Settings</h2>
-        <button id="close-settings" type="button" class="icon-button" title="Close" aria-label="Close">
+        <button
+          id="close-settings"
+          type="button"
+          class="icon-button"
+          title="Close"
+          aria-label="Close"
+        >
           <svg class="icon"><use href="#icon-x"></use></svg>
         </button>
       </div>
@@ -117,7 +173,9 @@
           <svg class="icon"><use href="#icon-download"></use></svg>
           Export identity
         </button>
-        <button id="reset-identity" type="button" class="danger-button">Reset local identity</button>
+        <button id="reset-identity" type="button" class="danger-button">
+          Reset local identity
+        </button>
       </div>
     </dialog>
 

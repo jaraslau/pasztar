@@ -60,6 +60,20 @@ def list_messages(
     return list(db.scalars(stmt.order_by(Message.created_at, Message.id).limit(limit)))
 
 
+@router.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_message(
+    message_id: str,
+    db: Session = Depends(get_db),
+    client: Client = Depends(require_client),
+) -> None:
+    message = db.get(Message, message_id)
+    if message is None or client.id not in {message.sender_id, message.recipient_id}:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown message")
+    db.delete(message)
+    db.commit()
+    events.publish("messages")
+
+
 @router.post("/messages/{message_id}/delivered", response_model=MessageOut)
 def mark_delivered(
     message_id: str,

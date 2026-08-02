@@ -291,6 +291,39 @@ def test_duplicate_message_id_recipient_isolation_and_limit():
     assert charlie_messages.json() == []
 
 
+def test_delete_message_by_participant_removes_it_for_both_sides():
+    alice_private, alice_public = keypair()
+    bob_private, bob_public = keypair()
+    charlie_private, charlie_public = keypair()
+    for client_id, display_name, public_key in [
+        ("alice", "Alice", alice_public),
+        ("bob", "Bob", bob_public),
+        ("charlie", "Charlie", charlie_public),
+    ]:
+        register_client(client_id, display_name, public_key)
+
+    body = b'{"id":"m1","recipient_id":"bob","ciphertext":"opaque"}'
+    assert (
+        client.post(
+            "/messages",
+            content=body,
+            headers=signed("POST", "/messages", body, "alice", alice_private),
+        ).status_code
+        == 201
+    )
+
+    charlie_headers = signed("DELETE", "/messages/m1", b"", "charlie", charlie_private)
+    assert client.delete("/messages/m1", headers=charlie_headers).status_code == 404
+
+    bob_headers = signed("DELETE", "/messages/m1", b"", "bob", bob_private)
+    assert client.delete("/messages/m1", headers=bob_headers).status_code == 204
+
+    alice_headers = signed("GET", "/messages", b"", "alice", alice_private)
+    bob_fetch_headers = signed("GET", "/messages", b"", "bob", bob_private)
+    assert client.get("/messages", headers=alice_headers).json() == []
+    assert client.get("/messages", headers=bob_fetch_headers).json() == []
+
+
 def test_client_directory_exposes_encryption_keys():
     alice_private, alice_public = keypair()
     bob_private, bob_public = keypair()

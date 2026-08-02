@@ -21,6 +21,7 @@ const state = {
   recording: null,
   audioContext: null,
   voiceStops: new Set(),
+  contextMenu: null,
 };
 
 const savedIdentity = localStorage.getItem(storeKey);
@@ -103,6 +104,11 @@ async function fingerprint(publicKey) {
 function status(text, error = false) {
   els.appStatus.textContent = text;
   els.appStatus.classList.toggle("error", error);
+}
+
+function closeContextMenu() {
+  state.contextMenu?.remove();
+  state.contextMenu = null;
 }
 
 async function signingPrivateKey() {
@@ -657,6 +663,41 @@ async function sendVoiceMessage(blob, durationMs, recipient) {
   await loadMessages({ scrollToBottom: true });
 }
 
+async function deleteMessage(message) {
+  if (!confirm("Delete this message for both sides?")) {
+    return;
+  }
+  await apiJson(
+    await signedFetch(`/messages/${encodeURIComponent(message.id)}`, {
+      method: "DELETE",
+    }),
+  );
+  status("Message deleted.");
+  await loadMessages();
+}
+
+function showMessageMenu(event, message) {
+  event.preventDefault();
+  closeContextMenu();
+  const menu = document.createElement("div");
+  const button = document.createElement("button");
+  menu.className = "context-menu";
+  button.type = "button";
+  button.className = "context-menu-item danger-item";
+  button.innerHTML =
+    '<svg class="icon"><use href="#icon-trash"></use></svg>Delete';
+  button.addEventListener("click", () => {
+    closeContextMenu();
+    deleteMessage(message).catch((error) => status(error.message, true));
+  });
+  menu.append(button);
+  document.body.append(menu);
+  state.contextMenu = menu;
+  const rect = menu.getBoundingClientRect();
+  menu.style.left = `${Math.min(event.clientX, innerWidth - rect.width - 8)}px`;
+  menu.style.top = `${Math.min(event.clientY, innerHeight - rect.height - 8)}px`;
+}
+
 async function renderMessageBody(message) {
   const payload = await decryptMessage(message);
   if (payload.kind === "voice") {
@@ -851,6 +892,9 @@ async function renderMessages({ scrollToBottom = false } = {}) {
     const item = document.createElement("article");
     item.className =
       message.sender_id === state.identity.clientId ? "message own" : "message";
+    item.addEventListener("contextmenu", (event) => {
+      showMessageMenu(event, message);
+    });
     const meta = document.createElement("p");
     meta.className = "meta";
     meta.textContent =
@@ -910,6 +954,13 @@ els.settingsModal.addEventListener("click", (event) => {
     closeSettings();
   }
 });
+document.addEventListener("click", closeContextMenu);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeContextMenu();
+  }
+});
+els.messages.addEventListener("scroll", closeContextMenu);
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));
 });
