@@ -2,6 +2,8 @@ const storeKey = "pasztar.identity";
 const pendingKey = "pasztar.pendingIdentity";
 const selectedKey = "pasztar.selectedClient";
 const maxRecordingMs = 60000;
+const eventReconnectBaseMs = 2000;
+const eventReconnectMaxMs = 30000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -11,6 +13,8 @@ const state = {
   messages: [],
   selected: null,
   refreshing: false,
+  eventsConnecting: false,
+  eventReconnectMs: eventReconnectBaseMs,
   marking: new Set(),
   recording: null,
   audioContext: null,
@@ -338,6 +342,10 @@ async function refresh() {
 }
 
 async function handleEvent(eventName) {
+  if (eventName === "ready") {
+    state.eventReconnectMs = eventReconnectBaseMs;
+    status("Event stream connected.");
+  }
   if (eventName === "clients") {
     await refresh();
   }
@@ -347,6 +355,10 @@ async function handleEvent(eventName) {
 }
 
 async function connectEvents() {
+  if (state.eventsConnecting) {
+    return;
+  }
+  state.eventsConnecting = true;
   try {
     const response = await signedFetch("/events");
     if (!response.ok || !response.body) {
@@ -364,12 +376,20 @@ async function connectEvents() {
         }
       }
     }
+    throw new Error("event stream closed");
   } catch (error) {
-    status(error.message, true);
+    status(`${error.message}; reconnecting.`, true);
+  } finally {
+    state.eventsConnecting = false;
   }
+  const delay = state.eventReconnectMs;
+  state.eventReconnectMs = Math.min(
+    state.eventReconnectMs * 2,
+    eventReconnectMaxMs,
+  );
   setTimeout(() => {
     connectEvents();
-  }, 2000);
+  }, delay);
 }
 
 function formatDuration(ms) {
