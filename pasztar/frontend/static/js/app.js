@@ -22,6 +22,7 @@ const state = {
   audioContext: null,
   voiceStops: new Set(),
   contextMenu: null,
+  selectedMessageIds: new Set(),
 };
 
 const savedIdentity = localStorage.getItem(storeKey);
@@ -49,6 +50,11 @@ const els = {
   voiceTimer: document.querySelector("#voice-timer"),
   cancelVoice: document.querySelector("#cancel-voice"),
   sendVoice: document.querySelector("#send-voice"),
+  selectionBar: document.querySelector("#selection-bar"),
+  selectionCount: document.querySelector("#selection-count"),
+  cancelSelection: document.querySelector("#cancel-selection"),
+  deleteSelected: document.querySelector("#delete-selected"),
+  forwardSelected: document.querySelector("#forward-selected"),
   clientTemplate: document.querySelector("#client-template"),
 };
 
@@ -109,6 +115,40 @@ function status(text, error = false) {
 function closeContextMenu() {
   state.contextMenu?.remove();
   state.contextMenu = null;
+}
+
+function updateSelectionUi() {
+  const count = state.selectedMessageIds.size;
+  els.messageForm.hidden = count > 0;
+  els.selectionBar.hidden = count === 0;
+  els.selectionCount.textContent = `${count} selected`;
+  els.deleteSelected.disabled = count === 0;
+  els.forwardSelected.disabled = true;
+}
+
+function exitSelection() {
+  state.selectedMessageIds.clear();
+  updateSelectionUi();
+  renderMessagesFromState().catch((error) => status(error.message, true));
+}
+
+function toggleMessageSelection(message) {
+  if (state.selectedMessageIds.has(message.id)) {
+    state.selectedMessageIds.delete(message.id);
+  } else {
+    state.selectedMessageIds.add(message.id);
+  }
+  updateSelectionUi();
+  renderMessagesFromState().catch((error) => status(error.message, true));
+}
+
+function enterSelection(message) {
+  if (state.recording) {
+    stopVoiceRecording(false);
+  }
+  state.selectedMessageIds.add(message.id);
+  updateSelectionUi();
+  renderMessagesFromState().catch((error) => status(error.message, true));
 }
 
 async function signingPrivateKey() {
@@ -663,16 +703,48 @@ async function sendVoiceMessage(blob, durationMs, recipient) {
   await loadMessages({ scrollToBottom: true });
 }
 
+async function deleteMessageId(messageId) {
+  await apiJson(
+    await signedFetch(`/messages/${encodeURIComponent(messageId)}`, {
+      method: "DELETE",
+    }),
+  );
+}
+
+async function runLimited(items, limit, task) {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const item = items[next];
+        next += 1;
+        await task(item);
+      }
+    }),
+  );
+}
+
 async function deleteMessage(message) {
   if (!confirm("Delete this message for both sides?")) {
     return;
   }
-  await apiJson(
-    await signedFetch(`/messages/${encodeURIComponent(message.id)}`, {
-      method: "DELETE",
-    }),
-  );
+  await deleteMessageId(message.id);
   status("Message deleted.");
+  await loadMessages();
+}
+
+async function deleteSelectedMessages() {
+  const ids = [...state.selectedMessageIds];
+  if (
+    !ids.length ||
+    !confirm(`Delete ${ids.length} selected messages for both sides?`)
+  ) {
+    return;
+  }
+  await runLimited(ids, 8, deleteMessageId);
+  state.selectedMessageIds.clear();
+  updateSelectionUi();
+  status(`${ids.length} messages deleted.`);
   await loadMessages();
 }
 
@@ -680,17 +752,26 @@ function showMessageMenu(event, message) {
   event.preventDefault();
   closeContextMenu();
   const menu = document.createElement("div");
-  const button = document.createElement("button");
+  const selectButton = document.createElement("button");
+  const deleteButton = document.createElement("button");
   menu.className = "context-menu";
-  button.type = "button";
-  button.className = "context-menu-item danger-item";
-  button.innerHTML =
+  selectButton.type = "button";
+  selectButton.className = "context-menu-item";
+  selectButton.innerHTML =
+    '<svg class="icon"><use href="#icon-select"></use></svg>Select';
+  selectButton.addEventListener("click", () => {
+    closeContextMenu();
+    enterSelection(message);
+  });
+  deleteButton.type = "button";
+  deleteButton.className = "context-menu-item danger-item";
+  deleteButton.innerHTML =
     '<svg class="icon"><use href="#icon-trash"></use></svg>Delete';
-  button.addEventListener("click", () => {
+  deleteButton.addEventListener("click", () => {
     closeContextMenu();
     deleteMessage(message).catch((error) => status(error.message, true));
   });
-  menu.append(button);
+  menu.append(selectButton, deleteButton);
   document.body.append(menu);
   state.contextMenu = menu;
   const rect = menu.getBoundingClientRect();
@@ -875,12 +956,32 @@ async function renderMessages({ scrollToBottom = false } = {}) {
   state.messages = await apiJson(await signedFetch("/messages?limit=100"));
   await syncMessageState();
   renderClients();
+  await renderMessagesFromState({ scrollToBottom, scrollFromBottom });
+}
+
+async function renderMessagesFromState({
+  scrollToBottom = false,
+  scrollFromBottom = els.messages.scrollHeight -
+    els.messages.scrollTop -
+    els.messages.clientHeight,
+} = {}) {
   if (!state.selected) {
     state.voiceStops.forEach((stop) => stop());
     state.voiceStops.clear();
     els.messages.replaceChildren();
     return;
   }
+  const visibleIds = new Set(
+    state.messages
+      .filter((message) => peerId(message) === state.selected.id)
+      .map((message) => message.id),
+  );
+  for (const messageId of state.selectedMessageIds) {
+    if (!visibleIds.has(messageId)) {
+      state.selectedMessageIds.delete(messageId);
+    }
+  }
+  updateSelectionUi();
   const nextMessages = document.createDocumentFragment();
   const nextStops = new Set();
   const previousStops = state.voiceStops;
@@ -892,6 +993,12 @@ async function renderMessages({ scrollToBottom = false } = {}) {
     const item = document.createElement("article");
     item.className =
       message.sender_id === state.identity.clientId ? "message own" : "message";
+    item.classList.toggle("selected", state.selectedMessageIds.has(message.id));
+    item.addEventListener("click", () => {
+      if (state.selectedMessageIds.size > 0) {
+        toggleMessageSelection(message);
+      }
+    });
     item.addEventListener("contextmenu", (event) => {
       showMessageMenu(event, message);
     });
@@ -930,6 +1037,8 @@ function renderClients() {
       node.append(badge);
     }
     node.addEventListener("click", async () => {
+      state.selectedMessageIds.clear();
+      updateSelectionUi();
       state.selected = client;
       localStorage.setItem(selectedKey, client.id);
       els.chatTitle.textContent = client.display_name;
@@ -958,9 +1067,16 @@ document.addEventListener("click", closeContextMenu);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     closeContextMenu();
+    if (state.selectedMessageIds.size > 0) {
+      exitSelection();
+    }
   }
 });
 els.messages.addEventListener("scroll", closeContextMenu);
+els.cancelSelection.addEventListener("click", exitSelection);
+els.deleteSelected.addEventListener("click", () => {
+  deleteSelectedMessages().catch((error) => status(error.message, true));
+});
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));
 });

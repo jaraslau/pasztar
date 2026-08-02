@@ -373,6 +373,11 @@ label {
   background: #102b27;
 }
 
+.message.selected {
+  border-color: var(--warm);
+  outline: 2px solid rgb(215 164 95 / 22%);
+}
+
 .message-text {
   margin-top: 5px;
   line-height: 1.45;
@@ -529,6 +534,30 @@ label {
   resize: none;
 }
 
+.selection-bar {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 14px 24px 16px;
+  border-top: 1px solid var(--line);
+  background: rgb(23 29 33 / 96%);
+  box-shadow: 0 -1px 0 rgb(255 255 255 / 3%) inset;
+}
+
+.selection-count {
+  justify-self: center;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.selection-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .voice-controls {
   display: flex;
   align-items: center;
@@ -581,6 +610,10 @@ label {
 
   .composer {
     grid-template-columns: minmax(0, 1fr) auto auto;
+    padding: 12px;
+  }
+
+  .selection-bar {
     padding: 12px;
   }
 
