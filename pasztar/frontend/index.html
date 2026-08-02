@@ -110,6 +110,10 @@
         <path d="M9 11l3 3L22 4" />
         <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
       </symbol>
+      <symbol id="icon-arrow-left" viewBox="0 0 24 24">
+        <path d="M19 12H5" />
+        <path d="m12 19-7-7 7-7" />
+      </symbol>
     </svg>
 
     <main class="shell">
@@ -127,6 +131,23 @@
               <svg class="icon"><use href="#icon-refresh"></use></svg>
             </button>
           </div>
+          <div
+            id="clients-forwarding-bar"
+            class="clients-forwarding-bar"
+            hidden
+          >
+            <span id="clients-forwarding-count" class="forwarding-count"></span>
+            <button
+              id="cancel-forwarding-clients"
+              type="button"
+              class="secondary clients-forwarding-cancel"
+              title="Cancel forwarding"
+              aria-label="Cancel forwarding"
+            >
+              <svg class="icon"><use href="#icon-x"></use></svg>
+              Cancel
+            </button>
+          </div>
           <p id="app-status" class="status"></p>
           <div id="clients" class="clients"></div>
         </section>
@@ -134,6 +155,15 @@
 
       <section class="chat">
         <header class="chat-head">
+          <button
+            id="back-to-clients"
+            type="button"
+            class="icon-button back-to-clients"
+            title="Back to clients"
+            aria-label="Back to clients"
+          >
+            <svg class="icon"><use href="#icon-arrow-left"></use></svg>
+          </button>
           <div>
             <p class="eyebrow">Direct messages</p>
             <h2 id="chat-title">Select a client</h2>

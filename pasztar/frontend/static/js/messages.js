@@ -130,9 +130,16 @@ export function updateSelectionUi() {
         state.forwardingMessages.length === 1 ? "" : "s"
       } - select a recipient from the client list`
     : "";
+  els.clientsForwardingBar.hidden = !forwarding;
+  els.clientsForwardingCount.textContent = forwarding
+    ? `Forwarding ${state.forwardingMessages.length} message${
+        state.forwardingMessages.length === 1 ? "" : "s"
+      }`
+    : "";
   els.chat.classList.toggle("forwarding", forwarding);
   els.clientsPanel.classList.toggle("forwarding", forwarding);
   els.cancelForwarding.disabled = state.forwardingSending;
+  els.cancelForwardingClients.disabled = state.forwardingSending;
 }
 
 export function exitSelection() {
@@ -583,6 +590,7 @@ export function beginForwarding(messages) {
   clearReplyTarget();
   state.selectedMessageIds.clear();
   state.forwardingMessages = messages;
+  els.shell.classList.remove("chat-open");
   updateSelectionUi();
   renderClients();
   renderMessagesFromState().catch((error) => status(error.message, true));
@@ -656,6 +664,7 @@ export async function forwardMessagesTo(recipient) {
     state.selected = recipient;
     localStorage.setItem(selectedKey, recipient.id);
     els.chatTitle.textContent = recipient.display_name;
+    els.shell.classList.add("chat-open");
     status(`${count} message${count === 1 ? "" : "s"} forwarded.`);
     updateSelectionUi();
     renderClients();
@@ -666,8 +675,7 @@ export async function forwardMessagesTo(recipient) {
   }
 }
 
-export function showMessageMenu(event, message) {
-  event.preventDefault();
+export function showMessageMenuAt(message, x, y) {
   closeContextMenu();
   const menu = document.createElement("div");
   const replyButton = document.createElement("button");
@@ -711,8 +719,60 @@ export function showMessageMenu(event, message) {
   document.body.append(menu);
   state.contextMenu = menu;
   const rect = menu.getBoundingClientRect();
-  menu.style.left = `${Math.min(event.clientX, innerWidth - rect.width - 8)}px`;
-  menu.style.top = `${Math.min(event.clientY, innerHeight - rect.height - 8)}px`;
+  menu.style.left = `${Math.min(x, innerWidth - rect.width - 8)}px`;
+  menu.style.top = `${Math.min(y, innerHeight - rect.height - 8)}px`;
+}
+
+export function showMessageMenu(event, message) {
+  event.preventDefault();
+  showMessageMenuAt(message, event.clientX, event.clientY);
+}
+
+function bindMessageLongPress(item, message) {
+  let timer = 0;
+  let startX = 0;
+  let startY = 0;
+  let opened = false;
+  const clear = () => {
+    clearTimeout(timer);
+    timer = 0;
+  };
+  item.addEventListener("pointerdown", (event) => {
+    if (
+      event.pointerType === "mouse" ||
+      event.target.closest("button, input, textarea, a")
+    ) {
+      return;
+    }
+    opened = false;
+    startX = event.clientX;
+    startY = event.clientY;
+    clear();
+    timer = setTimeout(() => {
+      opened = true;
+      event.preventDefault();
+      showMessageMenuAt(message, startX, startY);
+    }, 550);
+  });
+  item.addEventListener("pointermove", (event) => {
+    if (Math.hypot(event.clientX - startX, event.clientY - startY) > 10) {
+      clear();
+    }
+  });
+  for (const eventName of ["pointerup", "pointercancel", "pointerleave"]) {
+    item.addEventListener(eventName, clear);
+  }
+  item.addEventListener(
+    "click",
+    (event) => {
+      if (opened) {
+        event.preventDefault();
+        event.stopPropagation();
+        opened = false;
+      }
+    },
+    true,
+  );
 }
 
 export function scrollToMessage(messageId) {
@@ -1034,6 +1094,7 @@ export async function renderMessagesFromState({
     item.addEventListener("contextmenu", (event) => {
       showMessageMenu(event, message);
     });
+    bindMessageLongPress(item, message);
     if (isOwn) {
       item.dataset.status = messageState(message);
     }
@@ -1115,6 +1176,7 @@ export function renderClients() {
         state.selected = client;
         localStorage.setItem(selectedKey, client.id);
         els.chatTitle.textContent = client.display_name;
+        els.shell.classList.add("chat-open");
         renderClients();
         await loadMessages();
         await hooks.afterClientSelected?.();

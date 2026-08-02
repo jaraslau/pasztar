@@ -193,6 +193,11 @@ els.exportIdentity.addEventListener("click", () => {
   exportIdentity().catch((error) => status(error.message, true));
 });
 els.resetIdentity.addEventListener("click", resetIdentity);
+els.backToClients.addEventListener("click", () => {
+  closeContextMenu();
+  closeAttachmentMenu();
+  els.shell.classList.remove("chat-open");
+});
 els.startCall.addEventListener("click", () => {
   startCall().catch((error) => status(error.message, true));
 });
@@ -261,6 +266,7 @@ els.forwardSelected.addEventListener("click", () => {
   beginForwarding(selectedMessages);
 });
 els.cancelForwarding.addEventListener("click", cancelForwarding);
+els.cancelForwardingClients.addEventListener("click", cancelForwarding);
 els.cancelReply.addEventListener("click", clearReplyTarget);
 els.messageForm.addEventListener("submit", (event) => {
   sendMessage(event).catch((error) => status(error.message, true));
