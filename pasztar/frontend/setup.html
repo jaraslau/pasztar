@@ -3,27 +3,41 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pasztar Setup</title>
+    <title>pasztar setup</title>
     <link rel="stylesheet" href="/static/css/styles.css" />
   </head>
   <body class="setup-page">
     <main class="setup-screen">
       <form id="identity-form" class="setup-panel stack">
-        <h1>Pasztar</h1>
+        <h1>pasztar</h1>
         <label>
           Client ID
-          <input id="client-id" name="client-id" autocomplete="username" required />
+          <input
+            id="client-id"
+            name="client-id"
+            autocomplete="username"
+            required
+          />
         </label>
         <label>
           Display name
-          <input id="display-name" name="display-name" autocomplete="name" required />
+          <input
+            id="display-name"
+            name="display-name"
+            autocomplete="name"
+            required
+          />
         </label>
         <button id="register" type="submit">Register</button>
         <p id="setup-status" class="status"></p>
         <div class="splitter"></div>
         <label>
           Identity bundle
-          <input id="identity-import" type="file" accept="application/json,.json" />
+          <input
+            id="identity-import"
+            type="file"
+            accept="application/json,.json"
+          />
         </label>
       </form>
     </main>

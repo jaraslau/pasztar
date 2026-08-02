@@ -18,9 +18,25 @@ import {
 import { apiJson, decryptMessage, encryptFor, signedFetch } from "./crypto.js";
 
 let hooks = {};
+const forwardLineColors = [
+  "#7cc7ff",
+  "#f08ac4",
+  "#a6d96a",
+  "#c69cff",
+  "#f4c95d",
+  "#6fd6d2",
+];
 
 export function setMessageHooks(nextHooks) {
   hooks = nextHooks;
+}
+
+function forwardLineColor(clientId) {
+  let hash = 0;
+  for (const char of clientId || "") {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+  return forwardLineColors[hash % forwardLineColors.length];
 }
 
 export function messageAuthor(message) {
@@ -725,6 +741,7 @@ export async function renderForwardedFrom(message) {
   }
   const forwarded = document.createElement("p");
   forwarded.className = "forwarded-from";
+  forwarded.dataset.forwardedFrom = payload.forwardedFrom;
   forwarded.textContent = `Forwarded from ${displayNameForId(payload.forwardedFrom)}`;
   return forwarded;
 }
@@ -732,6 +749,9 @@ export async function renderForwardedFrom(message) {
 export async function renderMessageBody(message) {
   const payload = await decryptMessage(message);
   if (payload.kind === "call_event") {
+    if (!["started", "ended"].includes(payload.event)) {
+      return null;
+    }
     const text = document.createElement("p");
     text.className = "call-event-message";
     text.textContent = `${formatMessageTime(messageDate(message))} call ${payload.event}`;
@@ -1002,21 +1022,37 @@ export async function renderMessagesFromState({
     item.addEventListener("contextmenu", (event) => {
       showMessageMenu(event, message);
     });
-    const meta = document.createElement("p");
-    meta.className = "meta";
-    meta.textContent =
-      message.sender_id === state.identity.clientId
-        ? `to ${message.recipient_id} - ${messageState(message)} - ${formatMessageTime(sentAt)}`
-        : `from ${message.sender_id} - ${formatMessageTime(sentAt)}`;
-    item.append(meta);
+    const isOwn = message.sender_id === state.identity.clientId;
+    if (isOwn) {
+      item.dataset.status = messageState(message);
+    }
+    const metaTime = document.createElement("span");
+    metaTime.className = "meta-time";
+    metaTime.textContent = formatMessageTime(sentAt);
+    item.append(metaTime);
     const forwardedFrom = await renderForwardedFrom(message);
     if (forwardedFrom) {
+      item.classList.add("forwarded-message");
+      item.style.setProperty(
+        "--forward-line",
+        forwardLineColor(forwardedFrom.dataset.forwardedFrom),
+      );
       item.append(forwardedFrom);
     }
     if (message.reply_to_id) {
       item.append(await renderReplyQuote(message.reply_to_id));
     }
-    item.append(await renderMessageBody(message));
+    const body = await renderMessageBody(message);
+    if (!body) {
+      continue;
+    }
+    item.append(body);
+    const metaWho = document.createElement("p");
+    metaWho.className = "meta-who";
+    metaWho.textContent = isOwn
+      ? `to ${message.recipient_id}`
+      : `from ${message.sender_id}`;
+    item.append(metaWho);
     nextMessages.append(item);
   }
   previousStops.forEach((stop) => stop());

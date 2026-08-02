@@ -512,9 +512,7 @@ export async function enterCall(call) {
           method: "POST",
         }),
       );
-    } catch {
-      // The local permission failure is the useful error to surface.
-    }
+    } catch {}
     throw error;
   }
   applyCallTrackState();
@@ -551,6 +549,7 @@ export async function startCall() {
     return;
   }
   const recipient = state.selected;
+  const existing = visibleCallForSelected();
   state.callStarting = true;
   updateCallButtons();
   try {
@@ -562,7 +561,9 @@ export async function startCall() {
       await signedFetch("/calls", { method: "POST", body }),
     );
     await enterCall(call);
-    await sendCallEventMessage("started", recipient);
+    if (!existing) {
+      await sendCallEventMessage("started", recipient);
+    }
     status("Call started.");
   } finally {
     state.callStarting = false;
@@ -599,12 +600,14 @@ export async function leaveCall(notify = true) {
   const recipient = callPeerClient();
   cleanupLocalCall();
   if (notify && call) {
-    await sendCallEventMessage("ended", recipient);
-    await apiJson(
+    const left = await apiJson(
       await signedFetch(`/calls/${encodeURIComponent(call.id)}/leave`, {
         method: "POST",
       }),
     );
+    if (left.ended_at) {
+      await sendCallEventMessage("ended", recipient);
+    }
     await loadCalls();
   }
 }
