@@ -745,6 +745,10 @@ button.icon-button.active {
   mask-repeat: no-repeat;
 }
 
+.message.own[data-status="read"]:has(+ .message.own) .meta-time::before {
+  display: none;
+}
+
 .meta-who {
   margin-top: 6px;
   color: var(--muted);
