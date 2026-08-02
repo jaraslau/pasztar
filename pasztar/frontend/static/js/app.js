@@ -198,6 +198,7 @@ function closeContextMenu() {
 
 function setAttachmentMenu(open) {
   els.attachmentMenu.hidden = !open;
+  els.messageForm.classList.toggle("attachments-open", open);
   els.openAttachments.setAttribute("aria-expanded", String(open));
 }
 

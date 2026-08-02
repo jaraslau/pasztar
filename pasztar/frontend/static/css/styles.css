@@ -672,6 +672,7 @@ label {
 
 .attachment-picker {
   position: relative;
+  width: 38px;
 }
 
 .attachment-menu {
@@ -680,16 +681,22 @@ label {
   bottom: calc(100% + 8px);
   display: grid;
   gap: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
-  padding: 8px;
   z-index: 3;
 }
 
 .attachment-menu[hidden] {
   display: none;
+}
+
+.attachment-button {
+  border-color: var(--line);
+  background: var(--panel-raised);
+  color: var(--text);
+}
+
+.attachment-button:hover {
+  border-color: var(--line-strong);
+  background: #263139;
 }
 
 .selection-bar {
@@ -752,6 +759,10 @@ label {
   z-index: 2;
 }
 
+.composer.attachments-open .voice-controls {
+  right: 74px;
+}
+
 .voice-controls[hidden] {
   display: none;
 }
@@ -798,6 +809,10 @@ label {
   .voice-controls {
     right: 12px;
     justify-content: end;
+  }
+
+  .composer.attachments-open .voice-controls {
+    right: 62px;
   }
 
   .voice-player {
