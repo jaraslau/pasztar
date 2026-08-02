@@ -2,7 +2,7 @@ const storeKey = "pasztar.identity";
 const pendingKey = "pasztar.pendingIdentity";
 const selectedKey = "pasztar.selectedClient";
 const maxRecordingMs = 60000;
-const maxAttachmentBytes = 10 * 1024 * 1024;
+const maxAttachmentBytes = 100 * 1024 * 1024;
 const maxImageDimension = 1600;
 const eventReconnectBaseMs = 2000;
 const eventReconnectMaxMs = 30000;
@@ -428,6 +428,33 @@ function messageState(message) {
     return "delivered";
   }
   return "sent";
+}
+
+function messageDate(message) {
+  return new Date(message.created_at);
+}
+
+function dayKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function formatMessageDay(date) {
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatMessageTime(date) {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function unreadCount(clientId) {
@@ -1368,9 +1395,19 @@ async function renderMessagesFromState({
   const nextStops = new Set();
   const previousStops = state.voiceStops;
   state.voiceStops = nextStops;
+  let lastDay = "";
   for (const message of state.messages) {
     if (state.selected && peerId(message) !== state.selected.id) {
       continue;
+    }
+    const sentAt = messageDate(message);
+    const currentDay = dayKey(sentAt);
+    if (currentDay !== lastDay) {
+      const divider = document.createElement("div");
+      divider.className = "day-divider";
+      divider.textContent = formatMessageDay(sentAt);
+      nextMessages.append(divider);
+      lastDay = currentDay;
     }
     const item = document.createElement("article");
     item.className =
@@ -1389,8 +1426,8 @@ async function renderMessagesFromState({
     meta.className = "meta";
     meta.textContent =
       message.sender_id === state.identity.clientId
-        ? `to ${message.recipient_id} - ${messageState(message)}`
-        : `from ${message.sender_id}`;
+        ? `to ${message.recipient_id} - ${messageState(message)} - ${formatMessageTime(sentAt)}`
+        : `from ${message.sender_id} - ${formatMessageTime(sentAt)}`;
     item.append(meta);
     const forwardedFrom = await renderForwardedFrom(message);
     if (forwardedFrom) {

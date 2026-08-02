@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-MAX_CIPHERTEXT_LENGTH = 16 * 1024 * 1024
+MAX_CIPHERTEXT_LENGTH = 160 * 1024 * 1024
 
 
 class MessageCreate(BaseModel):

@@ -397,6 +397,24 @@ label {
   outline: 2px solid rgb(215 164 95 / 22%);
 }
 
+.day-divider {
+  display: grid;
+  grid-template-columns: minmax(20px, 1fr) auto minmax(20px, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.day-divider::before,
+.day-divider::after {
+  content: "";
+  height: 1px;
+  background: var(--line);
+}
+
 .message-text {
   margin-top: 5px;
   line-height: 1.45;
