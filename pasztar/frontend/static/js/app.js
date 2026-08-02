@@ -376,12 +376,22 @@ function formatDuration(ms) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+function formatPlaybackTime(seconds) {
+  if (!Number.isFinite(seconds)) {
+    return "0:00";
+  }
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+function setPlaybackIcon(button, icon) {
+  button.innerHTML = `<svg class="icon"><use href="#icon-${icon}"></use></svg>`;
+}
+
 function updateRecordingUi() {
   const recording = state.recording;
   els.recordVoice.hidden = Boolean(recording);
   els.voiceControls.hidden = !recording;
-  els.messageText.disabled = Boolean(recording);
-  els.sendText.disabled = Boolean(recording);
   els.cancelVoice.disabled = Boolean(recording?.stopping);
   els.sendVoice.disabled = Boolean(recording?.stopping);
   els.voiceTimer.textContent = recording
@@ -580,7 +590,7 @@ async function sendMessage(event) {
   });
   await apiJson(await signedFetch("/messages", { method: "POST", body }));
   els.messageText.value = "";
-  await loadMessages();
+  await loadMessages({ scrollToBottom: true });
 }
 
 async function sendVoiceMessage(blob, durationMs, recipient) {
@@ -599,23 +609,73 @@ async function sendVoiceMessage(blob, durationMs, recipient) {
   });
   await apiJson(await signedFetch("/messages", { method: "POST", body }));
   status("Voice message sent.");
-  await loadMessages();
+  await loadMessages({ scrollToBottom: true });
 }
 
 async function renderMessageBody(message) {
   const payload = await decryptMessage(message);
   if (payload.kind === "voice") {
-    const audio = document.createElement("audio");
     const url = URL.createObjectURL(
       new Blob([payload.data], { type: payload.mimeType }),
     );
+    const player = document.createElement("div");
+    const button = document.createElement("button");
+    const seek = document.createElement("input");
+    const time = document.createElement("span");
+    const audio = document.createElement("audio");
+
     state.audioUrls.push(url);
-    audio.className = "voice-message";
-    audio.controls = true;
+    player.className = "voice-player";
+    button.type = "button";
+    button.className = "voice-play";
+    button.setAttribute("aria-label", "Play voice message");
+    setPlaybackIcon(button, "play");
+    seek.type = "range";
+    seek.className = "voice-seek";
+    seek.min = "0";
+    seek.max = "0";
+    seek.step = "0.01";
+    seek.value = "0";
+    seek.setAttribute("aria-label", "Voice message position");
+    time.className = "voice-time";
+    time.textContent = "0:00";
+    audio.hidden = true;
     audio.preload = "metadata";
     audio.src = url;
-    audio.setAttribute("aria-label", "Voice message");
-    return audio;
+
+    audio.addEventListener("loadedmetadata", () => {
+      seek.max = String(audio.duration || 0);
+      time.textContent = `0:00 / ${formatPlaybackTime(audio.duration)}`;
+    });
+    audio.addEventListener("timeupdate", () => {
+      seek.value = String(audio.currentTime);
+      time.textContent = `${formatPlaybackTime(audio.currentTime)} / ${formatPlaybackTime(audio.duration)}`;
+    });
+    audio.addEventListener("play", () => {
+      button.setAttribute("aria-label", "Pause voice message");
+      setPlaybackIcon(button, "pause");
+    });
+    audio.addEventListener("pause", () => {
+      button.setAttribute("aria-label", "Play voice message");
+      setPlaybackIcon(button, "play");
+    });
+    audio.addEventListener("ended", () => {
+      audio.currentTime = 0;
+      seek.value = "0";
+    });
+    button.addEventListener("click", () => {
+      if (audio.paused) {
+        audio.play().catch((error) => status(error.message, true));
+      } else {
+        audio.pause();
+      }
+    });
+    seek.addEventListener("input", () => {
+      audio.currentTime = Number(seek.value);
+    });
+
+    player.append(button, seek, time, audio);
+    return player;
   }
   const text = document.createElement("p");
   text.className = "message-text";
@@ -623,7 +683,8 @@ async function renderMessageBody(message) {
   return text;
 }
 
-async function loadMessages() {
+async function loadMessages({ scrollToBottom = false } = {}) {
+  const scrollFromBottom = els.messages.scrollHeight - els.messages.scrollTop;
   state.messages = await apiJson(await signedFetch("/messages?limit=100"));
   await syncMessageState();
   state.audioUrls.forEach((url) => URL.revokeObjectURL(url));
@@ -649,6 +710,9 @@ async function loadMessages() {
     item.append(meta, await renderMessageBody(message));
     els.messages.append(item);
   }
+  els.messages.scrollTop = scrollToBottom
+    ? els.messages.scrollHeight
+    : els.messages.scrollHeight - scrollFromBottom;
 }
 
 function renderClients() {

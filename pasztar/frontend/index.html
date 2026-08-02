@@ -28,6 +28,13 @@
         <path d="M12 19v3" />
         <path d="M8 22h8" />
       </symbol>
+      <symbol id="icon-play" viewBox="0 0 24 24">
+        <path d="m8 5 11 7-11 7V5Z" />
+      </symbol>
+      <symbol id="icon-pause" viewBox="0 0 24 24">
+        <path d="M8 5v14" />
+        <path d="M16 5v14" />
+      </symbol>
       <symbol id="icon-download" viewBox="0 0 24 24">
         <path d="M12 3v12" />
         <path d="m7 10 5 5 5-5" />
@@ -69,10 +76,6 @@
         <div id="messages" class="messages"></div>
 
         <form id="message-form" class="composer">
-          <textarea id="message-text" rows="3" placeholder="Message" required></textarea>
-          <button id="record-voice" type="button" class="icon-button" title="Record voice" aria-label="Record voice">
-            <svg class="icon"><use href="#icon-mic"></use></svg>
-          </button>
           <div id="voice-controls" class="voice-controls" hidden>
             <span id="voice-timer" class="voice-timer">0:00</span>
             <button id="cancel-voice" type="button" class="icon-button" title="Cancel voice message" aria-label="Cancel voice message">
@@ -82,6 +85,10 @@
               <svg class="icon"><use href="#icon-send"></use></svg>
             </button>
           </div>
+          <textarea id="message-text" rows="3" placeholder="Message" required></textarea>
+          <button id="record-voice" type="button" class="icon-button" title="Record voice" aria-label="Record voice">
+            <svg class="icon"><use href="#icon-mic"></use></svg>
+          </button>
           <button id="send-text" type="submit" class="send-button" title="Send" aria-label="Send">
             <svg class="icon"><use href="#icon-send"></use></svg>
           </button>
