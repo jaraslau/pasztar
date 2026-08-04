@@ -37,10 +37,13 @@ import {
   declineCall,
   disableCamera,
   enableCamera,
+  fullscreenCall,
   leaveCall,
   loadCalls,
   sendCallState,
   startCall,
+  startScreenShare,
+  stopScreenShare,
   updateCallUi,
 } from "./calls.js";
 
@@ -146,6 +149,14 @@ async function openSettings() {
 
 function closeSettings() {
   els.settingsModal.close();
+}
+
+function mediaStatus(error) {
+  if (error.name === "NotAllowedError") {
+    status("Screen sharing was blocked by the browser or platform.", true);
+    return;
+  }
+  status(error.message, true);
 }
 
 function loadIdentity() {
@@ -304,9 +315,17 @@ els.cameraCall.addEventListener("click", () => {
     status(error.message, true),
   );
 });
+els.screenCall.addEventListener("click", () => {
+  (state.callScreenSharing ? stopScreenShare() : startScreenShare()).catch(
+    mediaStatus,
+  );
+});
 els.toggleCallSize.addEventListener("click", () => {
   state.callCollapsedManual = !state.callCollapsedManual;
   updateCallUi();
+});
+els.fullscreenCall.addEventListener("click", () => {
+  fullscreenCall().catch((error) => status(error.message, true));
 });
 els.leaveCall.addEventListener("click", () => {
   leaveCall(true).catch((error) => status(error.message, true));

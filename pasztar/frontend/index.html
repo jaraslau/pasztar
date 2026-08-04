@@ -53,6 +53,13 @@
         <path d="M10.5 6H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 1.7-.9" />
         <path d="M15 10l5-3v9.5" />
       </symbol>
+      <symbol id="icon-screen-share" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="13" rx="2" />
+        <path d="M8 21h8" />
+        <path d="M12 17v4" />
+        <path d="m9 10 3-3 3 3" />
+        <path d="M12 7v7" />
+      </symbol>
       <symbol id="icon-phone-off" viewBox="0 0 24 24">
         <path d="M3 3l18 18" />
         <path
@@ -250,6 +257,15 @@
                 <svg class="icon"><use href="#icon-video"></use></svg>
               </button>
               <button
+                id="screen-call"
+                type="button"
+                class="icon-button"
+                title="Share screen"
+                aria-label="Share screen"
+              >
+                <svg class="icon"><use href="#icon-screen-share"></use></svg>
+              </button>
+              <button
                 id="toggle-call-size"
                 type="button"
                 class="icon-button"
@@ -257,6 +273,15 @@
                 aria-label="Shrink call"
               >
                 <svg class="icon"><use href="#icon-minimize"></use></svg>
+              </button>
+              <button
+                id="fullscreen-call"
+                type="button"
+                class="icon-button"
+                title="Fullscreen video"
+                aria-label="Fullscreen video"
+              >
+                <svg class="icon"><use href="#icon-maximize"></use></svg>
               </button>
               <button
                 id="leave-call"

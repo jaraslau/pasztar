@@ -621,6 +621,9 @@ label,
   align-items: center;
   justify-items: center;
   position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: min(52vh, 520px);
   min-height: 0;
   overflow: hidden;
   border-radius: 12px;
@@ -634,8 +637,8 @@ label,
 .remote-video {
   display: block;
   width: 100%;
-  height: min(52vh, 520px);
-  object-fit: cover;
+  height: 100%;
+  object-fit: contain;
   background: #050708;
 }
 
@@ -643,8 +646,25 @@ label,
   min-height: 0;
 }
 
-.chat.call-expanded .remote-video {
+.chat.call-expanded .call-stage {
+  max-height: calc(100vh - 190px);
   height: calc(100vh - 190px);
+}
+
+.chat.call-expanded .remote-video {
+  height: 100%;
+}
+
+.call-stage:fullscreen {
+  max-height: none;
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+}
+
+.call-stage:fullscreen .remote-video {
+  width: 100vw;
+  height: 100vh;
 }
 
 .local-video {
@@ -658,6 +678,10 @@ label,
   object-fit: cover;
   box-shadow: var(--shadow-soft);
   transform: scaleX(-1);
+}
+
+.call-panel.screen-sharing .local-video {
+  transform: none;
 }
 
 .remote-placeholder {

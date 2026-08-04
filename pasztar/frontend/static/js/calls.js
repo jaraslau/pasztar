@@ -74,14 +74,22 @@ export function updateCallButtons() {
   setButtonIcon(els.cameraCall, state.callCameraOff ? "video-off" : "video");
   els.muteCall.classList.toggle("active", state.callMuted);
   els.cameraCall.classList.toggle("active", state.callCameraOff);
+  els.cameraCall.disabled = state.callMediaBusy;
+  els.screenCall.disabled = state.callMediaBusy;
   els.muteCall.title = state.callMuted
     ? "Unmute microphone"
     : "Mute microphone";
   els.cameraCall.title = state.callCameraOff
     ? "Turn camera on"
     : "Turn camera off";
+  els.screenCall.classList.toggle("active", state.callScreenSharing);
+  els.screenCall.title = state.callScreenSharing
+    ? "Stop sharing screen"
+    : "Share screen";
   els.muteCall.setAttribute("aria-label", els.muteCall.title);
   els.cameraCall.setAttribute("aria-label", els.cameraCall.title);
+  els.screenCall.setAttribute("aria-label", els.screenCall.title);
+  els.fullscreenCall.disabled = !document.fullscreenEnabled;
 }
 
 export function updateCallUi() {
@@ -103,11 +111,14 @@ export function updateCallUi() {
   els.declineCall.hidden = !incoming;
   els.muteCall.hidden = !active;
   els.cameraCall.hidden = !active;
+  els.screenCall.hidden = !active;
   els.toggleCallSize.hidden =
     !active || (allCamerasOff && !state.callCollapsedManual);
+  els.fullscreenCall.hidden = !active || compact;
   els.leaveCall.hidden = !active;
   els.callPanel.classList.toggle("active-call", Boolean(active));
   els.callPanel.classList.toggle("compact-call", compact);
+  els.callPanel.classList.toggle("screen-sharing", state.callScreenSharing);
   els.chat.classList.toggle("call-expanded", Boolean(active) && !compact);
   els.remoteVideo.hidden = !peerVideoVisible;
   els.remotePlaceholder.textContent = peerName;
@@ -125,6 +136,7 @@ export function updateCallUi() {
     els.callFlags.textContent = [
       state.callMuted ? "You muted" : "",
       state.callPeerMuted ? `${peerName} muted` : "",
+      state.callScreenSharing ? "Sharing screen" : "",
       state.callCameraOff ? "Your camera off" : "",
       state.callPeerCameraOff ? `${peerName} camera off` : "",
     ]
@@ -136,6 +148,14 @@ export function updateCallUi() {
     els.callStatus.textContent = `${displayNameForId(callPeerId(incoming))} is calling`;
     els.callFlags.textContent = "";
   }
+}
+
+export async function fullscreenCall() {
+  if (!document.fullscreenElement) {
+    await els.callStage.requestFullscreen();
+    return;
+  }
+  await document.exitFullscreen();
 }
 
 export function callPeerClient() {
@@ -177,6 +197,9 @@ export function cleanupLocalCall() {
   state.callSignalsSeen.clear();
   state.callMuted = false;
   state.callCameraOff = true;
+  state.callScreenSharing = false;
+  state.callCameraWasOffBeforeShare = true;
+  state.callMediaBusy = false;
   state.callPeerMuted = false;
   state.callPeerCameraOff = true;
   state.callCollapsedManual = false;
@@ -214,15 +237,13 @@ export function applyCallTrackState() {
   updateCallUi();
 }
 
-export async function enableCamera() {
-  if (!state.callStream || !navigator.mediaDevices?.getUserMedia) {
-    return;
+export async function replaceLocalVideoTrack(track) {
+  for (const current of state.callStream?.getVideoTracks() || []) {
+    await state.callVideoSender?.replaceTrack(null);
+    state.callStream.removeTrack(current);
+    current.stop();
   }
-  if (state.callStream.getVideoTracks().length === 0) {
-    const videoStream = await navigator.mediaDevices.getUserMedia({
-      video: inputDeviceConstraint(state.selectedVideoInputId),
-    });
-    const track = videoStream.getVideoTracks()[0];
+  if (track) {
     state.callStream.addTrack(track);
     if (state.peerConnection) {
       state.callVideoSender ||= state.peerConnection.addTransceiver("video", {
@@ -231,23 +252,123 @@ export async function enableCamera() {
       await state.callVideoSender.replaceTrack(track);
     }
   }
-  state.callCameraOff = false;
   els.localVideo.srcObject = state.callStream;
   els.localVideo.play().catch(() => null);
-  applyCallTrackState();
-  await sendCallState();
+}
+
+export async function enableCamera() {
+  if (!state.callStream || !navigator.mediaDevices?.getUserMedia) {
+    return;
+  }
+  if (state.callMediaBusy) {
+    return;
+  }
+  state.callMediaBusy = true;
+  updateCallButtons();
+  try {
+    state.callScreenSharing = false;
+    if (state.callStream.getVideoTracks().length === 0) {
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        video: inputDeviceConstraint(state.selectedVideoInputId),
+      });
+      await replaceLocalVideoTrack(videoStream.getVideoTracks()[0]);
+    }
+    state.callCameraOff = false;
+    applyCallTrackState();
+    await sendCallState();
+  } finally {
+    state.callMediaBusy = false;
+    updateCallButtons();
+  }
 }
 
 export async function disableCamera() {
-  for (const track of state.callStream?.getVideoTracks() || []) {
-    await state.callVideoSender?.replaceTrack(null);
-    state.callStream.removeTrack(track);
-    track.stop();
+  if (state.callMediaBusy) {
+    return;
   }
-  state.callCameraOff = true;
-  els.localVideo.srcObject = state.callStream;
-  applyCallTrackState();
-  await sendCallState();
+  state.callMediaBusy = true;
+  updateCallButtons();
+  try {
+    state.callScreenSharing = false;
+    await replaceLocalVideoTrack(null);
+    state.callCameraOff = true;
+    applyCallTrackState();
+    await sendCallState();
+  } finally {
+    state.callMediaBusy = false;
+    updateCallButtons();
+  }
+}
+
+export async function startScreenShare() {
+  if (!window.isSecureContext) {
+    throw new Error("Screen sharing needs HTTPS.");
+  }
+  if (!state.callStream || !navigator.mediaDevices?.getDisplayMedia) {
+    throw new Error("Screen sharing unavailable in this browser.");
+  }
+  if (state.callMediaBusy) {
+    return;
+  }
+  const screen = await navigator.mediaDevices.getDisplayMedia({
+    video: true,
+    audio: false,
+  });
+  const track = screen.getVideoTracks()[0];
+  try {
+    state.callMediaBusy = true;
+    updateCallButtons();
+    state.callCameraWasOffBeforeShare = state.callCameraOff;
+    if (!track) {
+      screen.getTracks().forEach((item) => item.stop());
+      throw new Error("No screen video track selected.");
+    }
+    track.addEventListener(
+      "ended",
+      () => {
+        setTimeout(() => {
+          stopScreenShare().catch((error) => status(error.message, true));
+        });
+      },
+      { once: true },
+    );
+    state.callScreenSharing = true;
+    state.callCameraOff = false;
+    await replaceLocalVideoTrack(track);
+    applyCallTrackState();
+    await sendCallState();
+  } finally {
+    state.callMediaBusy = false;
+    updateCallButtons();
+  }
+}
+
+export async function stopScreenShare() {
+  if (!state.callScreenSharing || state.callMediaBusy) {
+    return;
+  }
+  state.callMediaBusy = true;
+  updateCallButtons();
+  try {
+    const restoreCamera = !state.callCameraWasOffBeforeShare;
+    state.callScreenSharing = false;
+    state.callCameraWasOffBeforeShare = true;
+    await replaceLocalVideoTrack(null);
+    if (restoreCamera) {
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        video: inputDeviceConstraint(state.selectedVideoInputId),
+      });
+      await replaceLocalVideoTrack(videoStream.getVideoTracks()[0]);
+      state.callCameraOff = false;
+    } else {
+      state.callCameraOff = true;
+    }
+    applyCallTrackState();
+    await sendCallState();
+  } finally {
+    state.callMediaBusy = false;
+    updateCallButtons();
+  }
 }
 
 export async function applySelectedInputDevices() {
@@ -267,20 +388,11 @@ export async function applySelectedInputDevices() {
   state.callStream.addTrack(audioTrack);
   await state.callAudioSender?.replaceTrack(audioTrack);
 
-  if (!state.callCameraOff) {
+  if (!state.callCameraOff && !state.callScreenSharing) {
     const video = await navigator.mediaDevices.getUserMedia({
       video: inputDeviceConstraint(state.selectedVideoInputId),
     });
-    const videoTrack = video.getVideoTracks()[0];
-    for (const track of state.callStream.getVideoTracks()) {
-      state.callStream.removeTrack(track);
-      track.stop();
-    }
-    videoTrack.enabled = true;
-    state.callStream.addTrack(videoTrack);
-    await state.callVideoSender?.replaceTrack(videoTrack);
-    els.localVideo.srcObject = state.callStream;
-    els.localVideo.play().catch(() => null);
+    await replaceLocalVideoTrack(video.getVideoTracks()[0]);
   }
 }
 
