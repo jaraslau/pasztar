@@ -21,6 +21,8 @@ Use the WireGuard server IP for the app bindings:
 Use the same WireGuard IP for TURN:
 
   TURN_EXTERNAL_IP=10.8.0.1
+  TURN_PORT=10.8.0.1:3478
+  TURN_RELAY_PORTS=10.8.0.1:49160-49200
   CALL_ICE_SERVERS=[{"urls":["stun:10.8.0.1:3478","turn:10.8.0.1:3478?transport=udp","turn:10.8.0.1:3478?transport=tcp"],"username":"pasztar","credential":"strong-password"}]
 
 2. Start the app:

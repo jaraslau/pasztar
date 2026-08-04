@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import Depends, Header, HTTPException, Request, status
+from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -55,6 +56,7 @@ async def require_client(
     except (InvalidSignature, ValueError, binascii.Error) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad signature") from exc
 
+    db.execute(delete(Nonce).where(Nonce.created_at < now() - max_skew))
     db.add(Nonce(client_id=client.id, nonce=nonce))
     try:
         db.commit()

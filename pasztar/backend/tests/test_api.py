@@ -9,12 +9,12 @@ os.environ["DATABASE_URL"] = "sqlite://"
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.app import app
-from backend.core.db.models import Base
+from backend.core.db.models import Base, Nonce
 from backend.core.db.session import get_db
 from backend.core.signing import signature_payload
 from backend.core.settings import settings
@@ -190,6 +190,35 @@ def test_register_send_fetch_and_replay_rejection():
     fetched = client.get("/messages", headers=fetch_headers)
     assert fetched.status_code == 200
     assert [message["id"] for message in fetched.json()] == ["m1"]
+
+
+def test_auth_prunes_expired_nonces():
+    alice_private, alice_public = keypair()
+    _, bob_public = keypair()
+    register_client("alice", "Alice", alice_public)
+    register_client("bob", "Bob", bob_public)
+
+    with SessionLocal() as session:
+        session.add(
+            Nonce(
+                client_id="alice",
+                nonce="expired",
+                created_at=datetime.now(UTC)
+                - timedelta(seconds=settings.signature_max_skew_seconds + 1),
+            )
+        )
+        session.commit()
+
+    body = b'{"id":"m1","recipient_id":"bob","ciphertext":"opaque"}'
+    response = client.post(
+        "/messages",
+        content=body,
+        headers=signed("POST", "/messages", body, "alice", alice_private),
+    )
+
+    assert response.status_code == 201
+    with SessionLocal() as session:
+        assert session.scalar(select(Nonce).where(Nonce.nonce == "expired")) is None
 
 
 def test_message_reply_target_round_trips_and_stays_in_chat():
