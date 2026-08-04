@@ -3,6 +3,7 @@ import {
   clientHeartbeatMs,
   eventReconnectBaseMs,
   eventReconnectMaxMs,
+  mediaInputKey,
   pendingKey,
   savedIdentity,
   selectedKey,
@@ -31,6 +32,7 @@ import {
 } from "./messages.js";
 import {
   acceptCall,
+  applySelectedInputDevices,
   applyCallTrackState,
   declineCall,
   disableCamera,
@@ -90,7 +92,55 @@ function resetIdentity() {
   location.replace("/setup.html");
 }
 
-function openSettings() {
+function saveMediaInputs() {
+  localStorage.setItem(
+    mediaInputKey,
+    JSON.stringify({
+      audio: state.selectedAudioInputId,
+      video: state.selectedVideoInputId,
+    }),
+  );
+}
+
+function renderDeviceOptions(select, devices, selectedId, fallback) {
+  const options = [new Option(`Default ${fallback}`, "")];
+  devices.forEach((device, index) => {
+    options.push(
+      new Option(device.label || `${fallback} ${index + 1}`, device.deviceId),
+    );
+  });
+  select.replaceChildren(...options);
+  select.value = [...select.options].some(
+    (option) => option.value === selectedId,
+  )
+    ? selectedId
+    : "";
+}
+
+async function loadMediaInputs() {
+  if (!navigator.mediaDevices?.enumerateDevices) {
+    return;
+  }
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  renderDeviceOptions(
+    els.audioInput,
+    devices.filter((device) => device.kind === "audioinput"),
+    state.selectedAudioInputId,
+    "microphone",
+  );
+  renderDeviceOptions(
+    els.videoInput,
+    devices.filter((device) => device.kind === "videoinput"),
+    state.selectedVideoInputId,
+    "camera",
+  );
+  state.selectedAudioInputId = els.audioInput.value;
+  state.selectedVideoInputId = els.videoInput.value;
+  saveMediaInputs();
+}
+
+async function openSettings() {
+  await loadMediaInputs();
   els.settingsModal.showModal();
 }
 
@@ -214,8 +264,20 @@ setMessageHooks({
 els.refreshClients.addEventListener("click", () => {
   refresh().catch((error) => status(error.message, true));
 });
-els.openSettings.addEventListener("click", openSettings);
+els.openSettings.addEventListener("click", () => {
+  openSettings().catch((error) => status(error.message, true));
+});
 els.closeSettings.addEventListener("click", closeSettings);
+els.audioInput.addEventListener("change", () => {
+  state.selectedAudioInputId = els.audioInput.value;
+  saveMediaInputs();
+  applySelectedInputDevices().catch((error) => status(error.message, true));
+});
+els.videoInput.addEventListener("change", () => {
+  state.selectedVideoInputId = els.videoInput.value;
+  saveMediaInputs();
+  applySelectedInputDevices().catch((error) => status(error.message, true));
+});
 els.exportIdentity.addEventListener("click", () => {
   exportIdentity().catch((error) => status(error.message, true));
 });

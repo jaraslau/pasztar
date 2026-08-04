@@ -18,6 +18,7 @@ from backend.core.db.models import Base
 from backend.core.db.session import get_db
 from backend.core.signing import signature_payload
 from backend.core.settings import settings
+from backend.routers import calls as calls_router
 from backend.routers import clients as clients_router
 from backend.schemas.messages import MessageCreate
 
@@ -372,6 +373,52 @@ def test_call_visibility_and_signals_are_limited_to_chat_participants():
         ),
     )
     assert charlie_signals.status_code == 404
+
+
+def test_call_signal_response_survives_recipient_poll_race(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    alice_private, alice_public = keypair()
+    bob_private, bob_public = keypair()
+    register_client("alice", "Alice", alice_public)
+    register_client("bob", "Bob", bob_public)
+
+    create = json.dumps({"recipient_id": "bob"}).encode()
+    started = client.post(
+        "/calls",
+        content=create,
+        headers=signed("POST", "/calls", create, "alice", alice_private),
+    )
+    call_id = started.json()["id"]
+    assert (
+        client.post(
+            f"/calls/{call_id}/join",
+            headers=signed("POST", f"/calls/{call_id}/join", b"", "bob", bob_private),
+        ).status_code
+        == 200
+    )
+
+    def recipient_polls(_: str) -> None:
+        client.get(
+            f"/calls/{call_id}/signals",
+            headers=signed("GET", f"/calls/{call_id}/signals", b"", "bob", bob_private),
+        )
+
+    monkeypatch.setattr(calls_router.events, "publish", recipient_polls)
+
+    signal = json.dumps(
+        {"id": "s1", "recipient_id": "bob", "ciphertext": "opaque-signal"}
+    ).encode()
+    sent = client.post(
+        f"/calls/{call_id}/signals",
+        content=signal,
+        headers=signed(
+            "POST", f"/calls/{call_id}/signals", signal, "alice", alice_private
+        ),
+    )
+
+    assert sent.status_code == 201
+    assert sent.json()["ciphertext"] == "opaque-signal"
 
 
 def test_call_config_exposes_ice_servers(monkeypatch: pytest.MonkeyPatch):

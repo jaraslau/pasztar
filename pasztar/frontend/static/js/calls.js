@@ -2,6 +2,7 @@ import {
   callHeartbeatMs,
   displayNameForId,
   els,
+  inputDeviceConstraint,
   setButtonIcon,
   state,
   status,
@@ -145,6 +146,7 @@ export function closePeerConnection() {
   state.peerConnection?.close();
   state.peerConnection = null;
   state.remoteStream = null;
+  state.callAudioSender = null;
   state.callVideoSender = null;
   state.callPeerVideoLive = false;
   state.callMakingOffer = false;
@@ -192,10 +194,11 @@ export async function ensureCallMedia() {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error("Calls unavailable in this browser.");
   }
-  state.callStream = await navigator.mediaDevices.getUserMedia({
-    audio: true,
+  const audio = await navigator.mediaDevices.getUserMedia({
+    audio: inputDeviceConstraint(state.selectedAudioInputId),
     video: false,
   });
+  state.callStream = new MediaStream(audio.getAudioTracks());
   els.localVideo.srcObject = state.callStream;
   els.localVideo.play().catch(() => null);
 }
@@ -217,7 +220,7 @@ export async function enableCamera() {
   }
   if (state.callStream.getVideoTracks().length === 0) {
     const videoStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
+      video: inputDeviceConstraint(state.selectedVideoInputId),
     });
     const track = videoStream.getVideoTracks()[0];
     state.callStream.addTrack(track);
@@ -245,6 +248,40 @@ export async function disableCamera() {
   els.localVideo.srcObject = state.callStream;
   applyCallTrackState();
   await sendCallState();
+}
+
+export async function applySelectedInputDevices() {
+  if (!state.callStream || !navigator.mediaDevices?.getUserMedia) {
+    return;
+  }
+  const audio = await navigator.mediaDevices.getUserMedia({
+    audio: inputDeviceConstraint(state.selectedAudioInputId),
+    video: false,
+  });
+  const audioTrack = audio.getAudioTracks()[0];
+  for (const track of state.callStream.getAudioTracks()) {
+    state.callStream.removeTrack(track);
+    track.stop();
+  }
+  audioTrack.enabled = !state.callMuted;
+  state.callStream.addTrack(audioTrack);
+  await state.callAudioSender?.replaceTrack(audioTrack);
+
+  if (!state.callCameraOff) {
+    const video = await navigator.mediaDevices.getUserMedia({
+      video: inputDeviceConstraint(state.selectedVideoInputId),
+    });
+    const videoTrack = video.getVideoTracks()[0];
+    for (const track of state.callStream.getVideoTracks()) {
+      state.callStream.removeTrack(track);
+      track.stop();
+    }
+    videoTrack.enabled = true;
+    state.callStream.addTrack(videoTrack);
+    await state.callVideoSender?.replaceTrack(videoTrack);
+    els.localVideo.srcObject = state.callStream;
+    els.localVideo.play().catch(() => null);
+  }
 }
 
 export async function sendCallSignal(type, data) {
@@ -325,8 +362,9 @@ export function createPeerConnection() {
   state.callVideoSender = pc.addTransceiver("video", {
     direction: "sendrecv",
   }).sender;
-  for (const track of state.callStream?.getAudioTracks() || []) {
-    pc.addTrack(track, state.callStream);
+  const audioTrack = state.callStream?.getAudioTracks()[0];
+  if (audioTrack) {
+    state.callAudioSender = pc.addTrack(audioTrack, state.callStream);
   }
   const videoTrack = state.callStream?.getVideoTracks()[0];
   if (videoTrack) {

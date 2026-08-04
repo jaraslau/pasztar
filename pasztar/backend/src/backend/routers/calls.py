@@ -150,7 +150,7 @@ def create_signal(
     payload: CallSignalCreate,
     db: Session = Depends(get_db),
     client: Client = Depends(require_client),
-) -> CallSignal:
+) -> CallSignalOut:
     call = visible_active_call(db, call_id, client.id)
     if db.get(CallParticipant, {"call_id": call.id, "client_id": client.id}) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not in call")
@@ -181,9 +181,9 @@ def create_signal(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "signal id already exists"
         ) from exc
-    db.refresh(signal)
+    response = CallSignalOut.model_validate(signal)
     events.publish("calls")
-    return signal
+    return response
 
 
 @router.get("/calls/{call_id}/signals", response_model=list[CallSignalOut])

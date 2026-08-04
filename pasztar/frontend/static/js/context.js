@@ -1,6 +1,7 @@
 export const storeKey = "pasztar.identity";
 export const pendingKey = "pasztar.pendingIdentity";
 export const selectedKey = "pasztar.selectedClient";
+export const mediaInputKey = "pasztar.mediaInputs";
 export const maxRecordingMs = 60000;
 export const maxAttachmentBytes = 100 * 1024 * 1024;
 export const maxImageDimension = 1600;
@@ -9,6 +10,16 @@ export const eventReconnectMaxMs = 30000;
 export const clientHeartbeatMs = 15000;
 export const clientOnlineMs = 45000;
 export const callHeartbeatMs = 10000;
+
+function savedMediaInputs() {
+  try {
+    return JSON.parse(localStorage.getItem(mediaInputKey)) || {};
+  } catch {
+    return {};
+  }
+}
+
+const mediaInputs = savedMediaInputs();
 
 export const state = {
   identity: null,
@@ -43,6 +54,7 @@ export const state = {
   callPeerCameraOff: true,
   callCollapsedManual: false,
   callStream: null,
+  callAudioSender: null,
   callVideoSender: null,
   remoteStream: null,
   callPeerVideoLive: false,
@@ -54,6 +66,8 @@ export const state = {
   callSignalsSeen: new Set(),
   callPendingCandidates: [],
   callHeartbeat: null,
+  selectedAudioInputId: mediaInputs.audio || "",
+  selectedVideoInputId: mediaInputs.video || "",
 };
 
 export const savedIdentity = localStorage.getItem(storeKey);
@@ -69,6 +83,8 @@ export const els = {
   closeSettings: document.querySelector("#close-settings"),
   settingsModal: document.querySelector("#settings-modal"),
   identitySummary: document.querySelector("#identity-summary"),
+  audioInput: document.querySelector("#audio-input"),
+  videoInput: document.querySelector("#video-input"),
   chatTitle: document.querySelector("#chat-title"),
   shell: document.querySelector(".shell"),
   chat: document.querySelector(".chat"),
@@ -122,6 +138,10 @@ export const els = {
   forwardSelected: document.querySelector("#forward-selected"),
   clientTemplate: document.querySelector("#client-template"),
 };
+
+export function inputDeviceConstraint(deviceId) {
+  return deviceId ? { deviceId: { exact: deviceId } } : true;
+}
 
 export function status(text, error = false) {
   els.appStatus.textContent = text;

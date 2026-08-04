@@ -7,6 +7,7 @@ import {
   formatMessageDay,
   formatMessageTime,
   iconNode,
+  inputDeviceConstraint,
   maxAttachmentBytes,
   maxImageDimension,
   maxRecordingMs,
@@ -333,7 +334,9 @@ export async function startVoiceRecording() {
 
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: inputDeviceConstraint(state.selectedAudioInputId),
+    });
     const mimeType = recordingMimeType();
     const recorder = new MediaRecorder(
       stream,
