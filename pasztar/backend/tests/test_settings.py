@@ -4,9 +4,8 @@ from pathlib import Path
 os.environ.setdefault("DATABASE_URL", "sqlite://")
 
 import pytest
-from pydantic import ValidationError
-
 from backend.core.settings import Settings
+from pydantic import ValidationError
 
 
 def test_settings_loads_env_file(
@@ -31,23 +30,19 @@ def test_settings_loads_env_file(
 
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "\n".join(
-            [
-                "DATABASE_URL=sqlite://",
-                "APP_HOST=127.0.0.1",
-                "APP_PORT=9000",
-                "DEBUG_MODE=true",
-                "SIGNATURE_MAX_SKEW_SECONDS=42",
-                'CALL_ICE_SERVERS=[{"urls":"stun:stun.example.test:3478"}]',
-                "CALL_STALE_AFTER_SECONDS=44",
-                "CALL_SIGNAL_STALE_AFTER_SECONDS=601",
-                "CALL_SIGNAL_MAX_LENGTH=1024",
-                "MESSAGE_CIPHERTEXT_MAX_LENGTH=2048",
-                "MESSAGE_LIST_DEFAULT_LIMIT=12",
-                "MESSAGE_LIST_MAX_LIMIT=34",
-                "EXTRA_VALUE=ignored",
-            ]
-        )
+        """DATABASE_URL=sqlite://
+APP_HOST=127.0.0.1
+APP_PORT=9000
+DEBUG_MODE=true
+SIGNATURE_MAX_SKEW_SECONDS=42
+CALL_ICE_SERVERS=[{"urls":"stun:stun.example.test:3478"}]
+CALL_STALE_AFTER_SECONDS=44
+CALL_SIGNAL_STALE_AFTER_SECONDS=601
+CALL_SIGNAL_MAX_LENGTH=1024
+MESSAGE_CIPHERTEXT_MAX_LENGTH=2048
+MESSAGE_LIST_DEFAULT_LIMIT=12
+MESSAGE_LIST_MAX_LIMIT=34
+EXTRA_VALUE=ignored"""
     )
 
     settings = Settings(_env_file=env_file)

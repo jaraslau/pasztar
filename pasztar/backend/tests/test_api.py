@@ -7,21 +7,19 @@ from datetime import UTC, datetime, timedelta
 os.environ["DATABASE_URL"] = "sqlite://"
 
 import pytest
+from backend.app import app
+from backend.core.db.models import Base, Nonce
+from backend.core.db.session import get_db
+from backend.core.settings import settings
+from backend.core.signing import signature_payload
+from backend.routers import calls as calls_router
+from backend.routers import clients as clients_router
+from backend.schemas.messages import MessageCreate
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-from backend.app import app
-from backend.core.db.models import Base, Nonce
-from backend.core.db.session import get_db
-from backend.core.signing import signature_payload
-from backend.core.settings import settings
-from backend.routers import calls as calls_router
-from backend.routers import clients as clients_router
-from backend.schemas.messages import MessageCreate
-
 
 engine = create_engine(
     "sqlite://",
@@ -590,7 +588,7 @@ def test_delete_message_by_participant_removes_it_for_both_sides():
 
 def test_client_directory_exposes_encryption_keys():
     alice_private, alice_public = keypair()
-    bob_private, bob_public = keypair()
+    _, bob_public = keypair()
     alice_encryption_public = register_client("alice", "Alice", alice_public)
     bob_encryption_public = register_client("bob", "Bob", bob_public)
 

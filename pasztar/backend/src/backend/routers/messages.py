@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
@@ -13,6 +14,8 @@ from backend.core.settings import settings
 from backend.schemas.messages import MessageCreate, MessageOut
 
 router = APIRouter()
+Db = Annotated[Session, Depends(get_db)]
+CurrentClient = Annotated[Client, Depends(require_client)]
 
 
 @router.post(
@@ -20,8 +23,8 @@ router = APIRouter()
 )
 def create_message(
     payload: MessageCreate,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> Message:
     if db.get(Client, payload.recipient_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown recipient")
@@ -56,14 +59,14 @@ def create_message(
 
 @router.get("/messages", response_model=list[MessageOut])
 def list_messages(
+    db: Db,
+    client: CurrentClient,
     since: datetime | None = None,
     limit: int = Query(
         default=settings.message_list_default_limit,
         ge=1,
         le=settings.message_list_max_limit,
     ),
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
 ) -> list[Message]:
     stmt = select(Message).where(
         or_(Message.sender_id == client.id, Message.recipient_id == client.id)
@@ -82,8 +85,8 @@ def list_messages(
 @router.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_message(
     message_id: str,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> None:
     message = db.get(Message, message_id)
     if message is None or client.id not in {message.sender_id, message.recipient_id}:
@@ -96,8 +99,8 @@ def delete_message(
 @router.post("/messages/{message_id}/delivered", response_model=MessageOut)
 def mark_delivered(
     message_id: str,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> Message:
     message = db.get(Message, message_id)
     if message is None or message.recipient_id != client.id:
@@ -112,8 +115,8 @@ def mark_delivered(
 @router.post("/messages/{message_id}/read", response_model=MessageOut)
 def mark_read(
     message_id: str,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> Message:
     message = db.get(Message, message_id)
     if message is None or message.recipient_id != client.id:

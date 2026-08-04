@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
@@ -9,12 +10,13 @@ from backend.core.db.models import Client
 from backend.core.events import events
 
 router = APIRouter()
+CurrentClient = Annotated[Client, Depends(require_client)]
 
 
 @router.get("/events")
 async def stream_events(
     request: Request,
-    _: Client = Depends(require_client),
+    _: CurrentClient,
 ) -> StreamingResponse:
     async def stream() -> AsyncIterator[str]:
         async for queue in events.listen():

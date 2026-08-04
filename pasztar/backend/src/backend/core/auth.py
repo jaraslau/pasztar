@@ -1,6 +1,7 @@
 import base64
 import binascii
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -14,14 +15,20 @@ from backend.core.db.session import get_db
 from backend.core.settings import settings
 from backend.core.signing import signature_payload
 
+Db = Annotated[Session, Depends(get_db)]
+ClientIdHeader = Annotated[str, Header(alias="X-Client-Id")]
+TimestampHeader = Annotated[str, Header(alias="X-Timestamp")]
+NonceHeader = Annotated[str, Header(alias="X-Nonce")]
+SignatureHeader = Annotated[str, Header(alias="X-Signature")]
+
 
 async def require_client(
     request: Request,
-    db: Session = Depends(get_db),
-    client_id: str = Header(alias="X-Client-Id"),
-    timestamp: str = Header(alias="X-Timestamp"),
-    nonce: str = Header(alias="X-Nonce"),
-    signature: str = Header(alias="X-Signature"),
+    db: Db,
+    client_id: ClientIdHeader,
+    timestamp: TimestampHeader,
+    nonce: NonceHeader,
+    signature: SignatureHeader,
 ) -> Client:
     client = db.get(Client, client_id)
     if client is None:

@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +19,8 @@ from backend.schemas.clients import (
 )
 
 router = APIRouter()
+Db = Annotated[Session, Depends(get_db)]
+CurrentClient = Annotated[Client, Depends(require_client)]
 
 
 @router.post(
@@ -27,7 +31,7 @@ router = APIRouter()
 def register_client(
     payload: ClientCreate,
     response: Response,
-    db: Session = Depends(get_db),
+    db: Db,
 ) -> Client:
     if existing := db.get(Client, payload.id):
         return existing_registration(existing, payload, response)
@@ -54,8 +58,8 @@ def register_client(
 @router.patch("/clients/me", response_model=ClientOut)
 def update_client(
     payload: ClientUpdate,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> Client:
     if payload.id != client.id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "client id mismatch")
@@ -72,16 +76,16 @@ def update_client(
 
 @router.get("/clients", response_model=list[ClientOut])
 def list_clients(
-    db: Session = Depends(get_db),
-    _: Client = Depends(require_client),
+    db: Db,
+    _: CurrentClient,
 ) -> list[Client]:
     return list(db.scalars(select(Client).order_by(Client.display_name, Client.id)))
 
 
 @router.post("/heartbeat", response_model=HeartbeatOut)
 def heartbeat(
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> HeartbeatOut:
     client.last_seen = now()
     db.commit()

@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -30,18 +31,20 @@ from backend.schemas.calls import (
 )
 
 router = APIRouter()
+Db = Annotated[Session, Depends(get_db)]
+CurrentClient = Annotated[Client, Depends(require_client)]
 
 
 @router.get("/calls/config", response_model=CallConfigOut)
-def call_config(_: Client = Depends(require_client)) -> CallConfigOut:
+def call_config(_: CurrentClient) -> CallConfigOut:
     return CallConfigOut(ice_servers=settings.call_ice_servers)
 
 
 @router.post("/calls", response_model=CallOut, status_code=status.HTTP_201_CREATED)
 def create_call(
     payload: CallCreate,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> CallOut:
     prune_stale_calls(db)
     if payload.recipient_id == client.id:
@@ -70,8 +73,8 @@ def create_call(
 
 @router.get("/calls", response_model=list[CallOut])
 def list_calls(
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> list[CallOut]:
     prune_stale_calls(db)
     calls = list(
@@ -90,8 +93,8 @@ def list_calls(
 @router.post("/calls/{call_id}/join", response_model=CallOut)
 def join(
     call_id: str,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> CallOut:
     prune_stale_calls(db)
     call = visible_active_call(db, call_id, client.id)
@@ -107,8 +110,8 @@ def join(
 @router.post("/calls/{call_id}/leave", response_model=CallOut)
 def leave(
     call_id: str,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> CallOut:
     prune_stale_calls(db)
     call = visible_active_call(db, call_id, client.id)
@@ -126,8 +129,8 @@ def leave(
 @router.post("/calls/{call_id}/heartbeat", response_model=CallOut)
 def heartbeat(
     call_id: str,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> CallOut:
     prune_stale_calls(db)
     call = visible_active_call(db, call_id, client.id)
@@ -148,8 +151,8 @@ def heartbeat(
 def create_signal(
     call_id: str,
     payload: CallSignalCreate,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> CallSignalOut:
     call = visible_active_call(db, call_id, client.id)
     if db.get(CallParticipant, {"call_id": call.id, "client_id": client.id}) is None:
@@ -189,8 +192,8 @@ def create_signal(
 @router.get("/calls/{call_id}/signals", response_model=list[CallSignalOut])
 def list_signals(
     call_id: str,
-    db: Session = Depends(get_db),
-    client: Client = Depends(require_client),
+    db: Db,
+    client: CurrentClient,
 ) -> list[CallSignalOut]:
     visible_active_call(db, call_id, client.id)
     if db.get(CallParticipant, {"call_id": call_id, "client_id": client.id}) is None:
