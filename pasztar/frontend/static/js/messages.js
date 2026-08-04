@@ -301,6 +301,7 @@ export function resizeMessageText() {
     els.messageText.scrollHeight,
     160,
   )}px`;
+  els.sendText.hidden = els.messageText.value.trim() === "";
 }
 
 export function recordingMimeType() {
@@ -1162,9 +1163,6 @@ export function renderClients() {
     node.querySelector(".client-name").textContent = client.display_name;
     const online = isClientOnline(client);
     node.classList.toggle("online", online);
-    node.querySelector(".client-status-text").textContent = online
-      ? "Online"
-      : "Offline";
     const count = unreadCount(client.id);
     node.querySelector(".client-id").textContent = isSelf
       ? `${client.id} - you`

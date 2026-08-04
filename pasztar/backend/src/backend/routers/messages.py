@@ -70,7 +70,13 @@ def list_messages(
     )
     if since is not None:
         stmt = stmt.where(Message.created_at > since)
-    return list(db.scalars(stmt.order_by(Message.created_at, Message.id).limit(limit)))
+    messages = list(
+        db.scalars(
+            stmt.order_by(Message.created_at.desc(), Message.id.desc()).limit(limit)
+        )
+    )
+    messages.reverse()
+    return messages
 
 
 @router.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)

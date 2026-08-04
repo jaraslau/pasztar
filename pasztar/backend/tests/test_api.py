@@ -471,7 +471,7 @@ def test_duplicate_message_id_recipient_isolation_and_limit():
     bob_headers = signed("GET", "/messages?limit=2", b"", "bob", bob_private)
     bob_messages = client.get("/messages?limit=2", headers=bob_headers)
     assert bob_messages.status_code == 200
-    assert [message["id"] for message in bob_messages.json()] == ["m1", "m2"]
+    assert [message["id"] for message in bob_messages.json()] == ["m2", "m3"]
 
     charlie_headers = signed("GET", "/messages", b"", "charlie", charlie_private)
     charlie_messages = client.get("/messages", headers=charlie_headers)

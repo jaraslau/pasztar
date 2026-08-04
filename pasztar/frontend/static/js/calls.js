@@ -91,6 +91,11 @@ export function updateCallUi() {
     Boolean(active) && state.callCameraOff && state.callPeerCameraOff;
   const compact =
     Boolean(active) && (state.callCollapsedManual || allCamerasOff);
+  const peerVideoVisible =
+    Boolean(active) &&
+    !compact &&
+    !state.callPeerCameraOff &&
+    state.callPeerVideoLive;
   const peerName = active ? displayNameForId(state.activeCallPeerId) : "";
   els.callPanel.hidden = !incoming && !active;
   els.acceptCall.hidden = !incoming;
@@ -103,8 +108,9 @@ export function updateCallUi() {
   els.callPanel.classList.toggle("active-call", Boolean(active));
   els.callPanel.classList.toggle("compact-call", compact);
   els.chat.classList.toggle("call-expanded", Boolean(active) && !compact);
+  els.remoteVideo.hidden = !peerVideoVisible;
   els.remotePlaceholder.textContent = peerName;
-  els.remotePlaceholder.hidden = !active || !state.callPeerCameraOff || compact;
+  els.remotePlaceholder.hidden = !active || compact || peerVideoVisible;
   els.localVideo.hidden = !active || state.callCameraOff || compact;
   els.remoteMuted.hidden = !active || !state.callPeerMuted || compact;
   els.localMuted.hidden = !active || !state.callMuted || compact;
@@ -139,6 +145,8 @@ export function closePeerConnection() {
   state.peerConnection?.close();
   state.peerConnection = null;
   state.remoteStream = null;
+  state.callVideoSender = null;
+  state.callPeerVideoLive = false;
   state.callMakingOffer = false;
   state.callIgnoreOffer = false;
   state.callPendingCandidates = [];
@@ -189,6 +197,7 @@ export async function ensureCallMedia() {
     video: false,
   });
   els.localVideo.srcObject = state.callStream;
+  els.localVideo.play().catch(() => null);
 }
 
 export function applyCallTrackState() {
@@ -213,23 +222,22 @@ export async function enableCamera() {
     const track = videoStream.getVideoTracks()[0];
     state.callStream.addTrack(track);
     if (state.peerConnection) {
-      state.peerConnection.addTrack(track, state.callStream);
+      state.callVideoSender ||= state.peerConnection.addTransceiver("video", {
+        direction: "sendrecv",
+      }).sender;
+      await state.callVideoSender.replaceTrack(track);
     }
   }
   state.callCameraOff = false;
   els.localVideo.srcObject = state.callStream;
+  els.localVideo.play().catch(() => null);
   applyCallTrackState();
   await sendCallState();
-  await sendOffer(true);
 }
 
 export async function disableCamera() {
   for (const track of state.callStream?.getVideoTracks() || []) {
-    for (const sender of state.peerConnection?.getSenders() || []) {
-      if (sender.track === track) {
-        state.peerConnection.removeTrack(sender);
-      }
-    }
+    await state.callVideoSender?.replaceTrack(null);
     state.callStream.removeTrack(track);
     track.stop();
   }
@@ -237,7 +245,6 @@ export async function disableCamera() {
   els.localVideo.srcObject = state.callStream;
   applyCallTrackState();
   await sendCallState();
-  await sendOffer(true);
 }
 
 export async function sendCallSignal(type, data) {
@@ -315,12 +322,34 @@ export function createPeerConnection() {
   state.peerConnection = pc;
   state.remoteStream = remote;
   els.remoteVideo.srcObject = remote;
-  for (const track of state.callStream?.getTracks() || []) {
+  state.callVideoSender = pc.addTransceiver("video", {
+    direction: "sendrecv",
+  }).sender;
+  for (const track of state.callStream?.getAudioTracks() || []) {
     pc.addTrack(track, state.callStream);
+  }
+  const videoTrack = state.callStream?.getVideoTracks()[0];
+  if (videoTrack) {
+    state.callVideoSender
+      .replaceTrack(videoTrack)
+      .catch((error) => status(error.message, true));
   }
   pc.addEventListener("track", (event) => {
     for (const track of event.streams[0]?.getTracks() || [event.track]) {
       remote.addTrack(track);
+      if (track.kind === "video") {
+        const updatePeerVideo = () => {
+          state.callPeerVideoLive = !track.muted && track.readyState === "live";
+          if (state.callPeerVideoLive) {
+            els.remoteVideo.play().catch(() => null);
+          }
+          updateCallUi();
+        };
+        track.addEventListener("mute", updatePeerVideo);
+        track.addEventListener("unmute", updatePeerVideo);
+        track.addEventListener("ended", updatePeerVideo);
+        updatePeerVideo();
+      }
     }
   });
   pc.addEventListener("icecandidate", (event) => {
@@ -407,6 +436,9 @@ export async function handleCallSignal(signal) {
   if (type === "state") {
     state.callPeerMuted = Boolean(data?.muted);
     state.callPeerCameraOff = data?.cameraOff !== false;
+    if (state.callPeerCameraOff) {
+      state.callPeerVideoLive = false;
+    }
     updateCallUi();
     return;
   }
