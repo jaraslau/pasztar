@@ -231,6 +231,19 @@ function messageMinuteKey(date) {
   ].join(":");
 }
 
+function emptyMessages() {
+  const logo = document.createElement("img");
+  const empty = document.createElement("p");
+  const wrapper = document.createElement("div");
+  logo.src = "/assets/pasztar.png";
+  logo.alt = "";
+  wrapper.className = "empty-chat";
+  empty.className = "empty-chat-text";
+  empty.textContent = "Nothing here yet";
+  wrapper.append(logo, empty);
+  els.messages.replaceChildren(wrapper);
+}
+
 export async function markMessage(message, stateName) {
   const key = `${stateName}:${message.id}`;
   if (state.marking.has(key)) {
@@ -1065,7 +1078,7 @@ export async function renderMessagesFromState({
     state.voiceStops.forEach((stop) => stop());
     state.voiceStops.clear();
     clearReplyTarget();
-    els.messages.replaceChildren();
+    emptyMessages();
     return;
   }
   const visibleIds = new Set(
@@ -1174,7 +1187,11 @@ export async function renderMessagesFromState({
     previousGroup = group.allowed ? group : null;
   }
   previousStops.forEach((stop) => stop());
-  els.messages.replaceChildren(nextMessages);
+  if (nextMessages.childNodes.length === 0) {
+    emptyMessages();
+  } else {
+    els.messages.replaceChildren(nextMessages);
+  }
   els.messages.scrollTop = scrollToBottom
     ? els.messages.scrollHeight
     : els.messages.scrollHeight - els.messages.clientHeight - scrollFromBottom;
@@ -1182,7 +1199,10 @@ export async function renderMessagesFromState({
 
 export function renderClients() {
   els.clients.replaceChildren();
-  for (const client of state.clients) {
+  const clients = [...state.clients].sort(
+    (a, b) => Number(isClientOnline(b)) - Number(isClientOnline(a)),
+  );
+  for (const client of clients) {
     const isSelf = client.id === state.identity?.clientId;
     const node = els.clientTemplate.content.firstElementChild.cloneNode(true);
     node.classList.toggle("active", state.selected?.id === client.id);

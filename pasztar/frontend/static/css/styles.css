@@ -562,6 +562,23 @@ label {
   scrollbar-color: var(--line-strong) transparent;
 }
 
+.empty-chat {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  margin: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.empty-chat img {
+  width: 72px;
+  height: 62px;
+  object-fit: contain;
+  opacity: 0.88;
+}
+
 .chat.forwarding .messages {
   background: linear-gradient(180deg, var(--warm-glow), transparent 260px);
 }
