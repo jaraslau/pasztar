@@ -766,6 +766,18 @@ button.icon-button.active {
   margin-top: 0;
 }
 
+.message-group-start .message-content {
+  padding-bottom: 2px;
+}
+
+.message-group-continuation .meta-time {
+  display: none;
+}
+
+.message-group-continuation .message-content {
+  padding-top: 2px;
+}
+
 .message.selected {
   background: transparent;
 }

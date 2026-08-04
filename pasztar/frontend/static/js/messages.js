@@ -220,6 +220,16 @@ function isClientOnline(client) {
   return Number.isFinite(lastSeen) && Date.now() - lastSeen <= clientOnlineMs;
 }
 
+function messageMinuteKey(date) {
+  return [
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+  ].join(":");
+}
+
 export async function markMessage(message, stateName) {
   const key = `${stateName}:${message.id}`;
   if (state.marking.has(key)) {
@@ -1075,6 +1085,7 @@ export async function renderMessagesFromState({
   state.voiceStops = nextStops;
   const payloads = new Map();
   let lastDay = "";
+  let previousGroup = null;
   for (const message of state.messages) {
     if (state.selected && peerId(message) !== state.selected.id) {
       continue;
@@ -1087,6 +1098,7 @@ export async function renderMessagesFromState({
       divider.textContent = formatMessageDay(sentAt);
       nextMessages.append(divider);
       lastDay = currentDay;
+      previousGroup = null;
     }
     const item = document.createElement("article");
     const isOwn = message.sender_id === state.identity.clientId;
@@ -1128,8 +1140,24 @@ export async function renderMessagesFromState({
     if (!body) {
       continue;
     }
-    if (body.classList.contains("call-event-message")) {
+    const isCallEvent = body.classList.contains("call-event-message");
+    if (isCallEvent) {
       item.className = "message call-event-row";
+    }
+    const group = {
+      item,
+      senderId: message.sender_id,
+      minute: messageMinuteKey(sentAt),
+      allowed: !isCallEvent && !message.reply_to_id && !forwardedFrom,
+    };
+    if (
+      group.allowed &&
+      previousGroup?.allowed &&
+      previousGroup.senderId === group.senderId &&
+      previousGroup.minute === group.minute
+    ) {
+      previousGroup.item.classList.add("message-group-start");
+      item.classList.add("message-group-continuation");
     }
     content.append(body);
     const metaWho = document.createElement("p");
@@ -1140,6 +1168,7 @@ export async function renderMessagesFromState({
     content.append(metaWho);
     item.append(content);
     nextMessages.append(item);
+    previousGroup = group.allowed ? group : null;
   }
   previousStops.forEach((stop) => stop());
   els.messages.replaceChildren(nextMessages);
