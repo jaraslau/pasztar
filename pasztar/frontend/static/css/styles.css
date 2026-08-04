@@ -307,6 +307,19 @@ label {
   letter-spacing: 0.06em;
 }
 
+h1,
+h2,
+label,
+.eyebrow,
+.status,
+.empty-chat,
+.meta-time,
+.meta-who,
+.call-status,
+.call-flags {
+  user-select: none;
+}
+
 .actions,
 .section-head,
 .chat-head {
@@ -1034,9 +1047,7 @@ button.icon-button.active {
   gap: 9px;
   width: min(400px, 76vw);
   margin-top: 2px;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 4%);
-  padding: 6px 10px;
+  padding: 2px 0;
 }
 
 .message.own .voice-player {
