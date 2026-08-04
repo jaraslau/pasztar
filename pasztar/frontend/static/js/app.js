@@ -1,5 +1,6 @@
 import {
   els,
+  clientHeartbeatMs,
   eventReconnectBaseMs,
   eventReconnectMaxMs,
   pendingKey,
@@ -26,6 +27,7 @@ import {
   setMessageHooks,
   startVoiceRecording,
   stopVoiceRecording,
+  renderClients,
 } from "./messages.js";
 import {
   acceptCall,
@@ -179,6 +181,31 @@ async function connectEvents() {
   }, delay);
 }
 
+function startClientHeartbeat() {
+  if (state.clientHeartbeat) {
+    return;
+  }
+  const beat = () => {
+    signedFetch("/heartbeat", { method: "POST" })
+      .then(apiJson)
+      .then(({ last_seen }) => {
+        const self = state.clients.find(
+          (client) => client.id === state.identity.clientId,
+        );
+        if (self) {
+          self.last_seen = last_seen;
+          renderClients();
+        }
+      })
+      .catch((error) => status(error.message, true));
+  };
+  beat();
+  state.clientHeartbeat = setInterval(() => {
+    beat();
+    renderClients();
+  }, clientHeartbeatMs);
+}
+
 setMessageHooks({
   afterClientsLoaded: updateCallUi,
   afterClientSelected: loadCalls,
@@ -307,5 +334,6 @@ els.sendVoice.addEventListener("click", () => {
 if (savedIdentity) {
   resizeMessageText();
   loadIdentity();
+  startClientHeartbeat();
   connectEvents();
 }

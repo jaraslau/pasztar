@@ -384,7 +384,9 @@ label {
 
 .client {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
   position: relative;
   width: 100%;
   min-width: 0;
@@ -393,7 +395,7 @@ label {
   border-radius: 10px;
   background: transparent;
   color: var(--text);
-  padding: 10px 40px 10px 14px;
+  padding: 10px 12px 10px 14px;
   transition: background 0.15s ease;
 }
 
@@ -429,6 +431,12 @@ label {
   background: var(--accent);
 }
 
+.client-copy {
+  display: grid;
+  min-width: 0;
+  justify-items: start;
+}
+
 .client.forward-target::before {
   background: rgb(63 199 174 / 35%);
 }
@@ -460,6 +468,28 @@ label {
   letter-spacing: 0.02em;
 }
 
+.client-status {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.client-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+
+.client.online .client-status-dot {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
 .eyebrow {
   text-transform: uppercase;
   font-weight: 700;
@@ -467,10 +497,6 @@ label {
 }
 
 .unread {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
   min-width: 20px;
   height: 20px;
   border-radius: 999px;

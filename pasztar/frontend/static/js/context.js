@@ -6,6 +6,8 @@ export const maxAttachmentBytes = 100 * 1024 * 1024;
 export const maxImageDimension = 1600;
 export const eventReconnectBaseMs = 2000;
 export const eventReconnectMaxMs = 30000;
+export const clientHeartbeatMs = 15000;
+export const clientOnlineMs = 45000;
 export const callHeartbeatMs = 10000;
 
 export const state = {
@@ -18,6 +20,7 @@ export const state = {
   pendingMessageLoad: null,
   eventsConnecting: false,
   eventReconnectMs: eventReconnectBaseMs,
+  clientHeartbeat: null,
   marking: new Set(),
   recording: null,
   audioContext: null,

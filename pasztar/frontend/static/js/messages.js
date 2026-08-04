@@ -1,5 +1,6 @@
 import {
   attachmentName,
+  clientOnlineMs,
   dayKey,
   displayNameForId,
   els,
@@ -212,6 +213,11 @@ export function unreadCount(clientId) {
     (message) =>
       isIncoming(message) && message.sender_id === clientId && !message.read_at,
   ).length;
+}
+
+function isClientOnline(client) {
+  const lastSeen = Date.parse(client.last_seen);
+  return Number.isFinite(lastSeen) && Date.now() - lastSeen <= clientOnlineMs;
 }
 
 export async function markMessage(message, stateName) {
@@ -1154,6 +1160,11 @@ export function renderClients() {
     );
     node.disabled = state.forwardingMessages.length > 0 && isSelf;
     node.querySelector(".client-name").textContent = client.display_name;
+    const online = isClientOnline(client);
+    node.classList.toggle("online", online);
+    node.querySelector(".client-status-text").textContent = online
+      ? "Online"
+      : "Offline";
     const count = unreadCount(client.id);
     node.querySelector(".client-id").textContent = isSelf
       ? `${client.id} - you`
@@ -1162,7 +1173,7 @@ export function renderClients() {
       const badge = document.createElement("span");
       badge.className = "unread";
       badge.textContent = String(count);
-      node.append(badge);
+      node.querySelector(".client-status").append(badge);
     }
     node.addEventListener("click", () => {
       (async () => {
