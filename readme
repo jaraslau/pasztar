@@ -1,12 +1,12 @@
 pasztar / arcana
 
-This is the 4th iteration of a messenger, that started 6 years ago as a school project.
+This is the 4th iteration of a messaging app, that started 6 years ago as a school project.
 I wanted to finally make something out of it so I went with a node/local access model.
 You host it on your VPS and connect over the VPN like WireGuard or Tailscale.
 
 VPN-only deployment is strongly preferred
 
-The app is served by Docker Compose on the WireGuard server. The browser still
+The app is served by Docker Compose. The browser still
 needs HTTPS because WebCrypto is unavailable on plain HTTP origins.
 
 1. Configure env:
