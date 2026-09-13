@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import hmac
 import json
 import os
 import uuid
@@ -8,7 +10,7 @@ os.environ["DATABASE_URL"] = "sqlite://"
 
 import pytest
 from backend.app import app
-from backend.core.db.models import Base, BootstrapState, Nonce
+from backend.core.db.models import Base, BootstrapState, Client, Nonce
 from backend.core.db.session import get_db
 from backend.core.settings import settings
 from backend.core.signing import signature_payload
@@ -19,6 +21,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -464,6 +467,7 @@ def test_call_signal_response_survives_recipient_poll_race(
 
 
 def test_call_config_exposes_ice_servers(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "turn_shared_secret", None)
     alice_private, alice_public = keypair()
     register_client("alice", "Alice", alice_public)
     monkeypatch.setattr(
@@ -481,6 +485,32 @@ def test_call_config_exposes_ice_servers(monkeypatch: pytest.MonkeyPatch):
     assert response.json() == {
         "ice_servers": [{"urls": "turn:turn.example.test:3478", "username": "u"}]
     }
+
+
+def test_turn_credentials_are_temporary_and_identity_bound(monkeypatch):
+    private, public = keypair()
+    register_client("alice", "Alice", public)
+    secret = "test-turn-secret"
+    monkeypatch.setattr(settings, "turn_shared_secret", SecretStr(secret))
+    monkeypatch.setattr(settings, "turn_credentials_lifetime_seconds", 42)
+    servers = [{"urls": ["stun:relay:3478", "turn:relay:3478"]}]
+    monkeypatch.setattr(settings, "call_ice_servers", servers)
+    start = datetime.now(UTC)
+    monkeypatch.setattr(calls_router, "now", lambda: start)
+    response = client.get(
+        "/calls/config", headers=signed("GET", "/calls/config", b"", "alice", private)
+    )
+    assert response.headers["cache-control"] == "no-store"
+    server = response.json()["ice_servers"][0]
+    assert server["username"] == f"{int(start.timestamp()) + 42}:alice"
+    assert (
+        server["credential"]
+        == base64.b64encode(
+            hmac.digest(secret.encode(), server["username"].encode(), hashlib.sha1)
+        ).decode()
+    )
+    assert "credential" not in servers[0]
+    assert secret not in response.text
 
 
 def test_message_ciphertext_limit_is_generous_but_bounded():
@@ -636,6 +666,29 @@ def test_future_timestamp_cannot_be_replayed_after_one_skew_window(monkeypatch):
         "backend.core.auth.now", lambda: start + timedelta(seconds=skew + 1)
     )
     assert client.post("/heartbeat", headers=headers).status_code == 401
+
+
+def test_authenticated_activity_restores_inactive_identity():
+    private, public = keypair()
+    register_client("alice", "Alice", public)
+    aged = datetime.now(UTC) - timedelta(days=settings.identity_inactive_days + 1)
+    with SessionLocal() as db:
+        db.get(Client, "alice").last_seen = aged
+        db.commit()
+    wrong, _ = keypair()
+    assert (
+        client.get(
+            "/clients", headers=signed("GET", "/clients", b"", "alice", wrong)
+        ).status_code
+        == 401
+    )
+    with SessionLocal() as db:
+        assert db.get(Client, "alice").last_seen == aged.replace(tzinfo=None)
+    response = client.get(
+        "/clients", headers=signed("GET", "/clients", b"", "alice", private)
+    )
+    assert response.status_code == 200
+    assert response.json()[0]["inactive"] is False
 
 
 def test_invalid_keys_and_nonce_are_rejected_without_changing_identity():

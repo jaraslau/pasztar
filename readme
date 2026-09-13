@@ -22,9 +22,10 @@ Use the WireGuard server IP for the app bindings:
 Use the same WireGuard IP for TURN:
 
   TURN_EXTERNAL_IP=10.8.0.1
+  TURN_ALLOWED_PEER_RANGE=10.8.0.0-10.8.0.255
   TURN_PORT=10.8.0.1:3478
   TURN_RELAY_PORTS=10.8.0.1:49160-49200
-  CALL_ICE_SERVERS=[{"urls":["stun:10.8.0.1:3478","turn:10.8.0.1:3478?transport=udp","turn:10.8.0.1:3478?transport=tcp"],"username":"pasztar","credential":"strong-password"}]
+  CALL_ICE_SERVERS=[{"urls":["stun:10.8.0.1:3478","turn:10.8.0.1:3478?transport=udp","turn:10.8.0.1:3478?transport=tcp"]}]
 
 2. Start the app:
 
@@ -60,7 +61,7 @@ With TRUSTED_IDENTITIES=true, open the setup URL printed by the bootstrap script
 or paste its token into the setup page, and create the first identity. The token
 is consumed once. In Settings, choose "Invite someone" and copy the invitation
 link to share it yourself. Each invitation admits one identity and expires after
-24 hours. Anyone holding the link can redeem it, and every admitted user can
+INVITATION_LIFETIME_HOURS (24 by default). Anyone holding the link can redeem it, and every admitted user can
 invite others. Recipients still need VPN access to reach the app.
 
 Already-registered identities retain access and can invite users when trusted
@@ -77,3 +78,68 @@ If the page returns 403 while connected to WireGuard, browser traffic is reachin
 Caddy from a public IP instead of 10.8.0.0/24. Use full-tunnel WireGuard, route
 <server-public-ip>/32 through WireGuard, or use split DNS so pasztar.example.com
 resolves to 10.8.0.1 for VPN clients.
+
+Internet deployment
+
+Run the bootstrap script before exposing the app. It enables TRUSTED_IDENTITIES
+and generates TURN_SHARED_SECRET if absent or still set to the example value.
+Existing identities retain access; review identities admitted during open registration.
+
+Keep API_PORT=127.0.0.1:8000 and FRONTEND_PORT=127.0.0.1:8080. Publish HTTPS
+through Caddy using this public-site configuration:
+
+  pasztar.example.com {
+    reverse_proxy 127.0.0.1:8080
+  }
+
+Set TRUSTED_PROXY_CIDR to the exact address/CIDR of your Caddy proxy as seen by
+the frontend container (often the Docker network gateway for a host-side proxy).
+Only this peer may supply X-Forwarded-For for per-client limits. The default is
+127.0.0.1/32; without the correct value, proxied users share one rate bucket.
+Do not trust arbitrary internet addresses, and keep the frontend port private.
+
+Nginx settings come from environment variables via its native config template:
+API_REQUEST_RATE/BURST (10r/s, 30), REGISTRATION_REQUEST_RATE/BURST (5r/m, 5),
+and API_CONNECTIONS_PER_IP (20). Admission limits apply only to POST /api/clients.
+API_MAX_BODY_BYTES defaults to 524288; only /api/messages accepts the larger
+MESSAGE_MAX_BODY_BYTES (178257920). CLIENT_BODY_TIMEOUT_SECONDS defaults to 30.
+EVENT_PROXY_TIMEOUT_SECONDS (75) must exceed EVENT_KEEPALIVE_SECONDS (25).
+Nginx streams events without response buffering. Keep the API port private so
+requests cannot bypass these limits. A shared NAT shares one IP quota.
+
+For public calls, bind TURN_PORT and TURN_RELAY_PORTS to the public interface,
+set TURN_EXTERNAL_IP to its public IP, and use that host in CALL_ICE_SERVERS.
+Permit the configured TURN TCP/UDP listener and UDP relay range in the firewall.
+TURN_SHARED_SECRET must be a strong secret shared only by the API and coturn;
+CALL_ICE_SERVERS should contain URLs without static usernames or passwords.
+The API supplies identity-bound credentials lasting TURN_CREDENTIALS_LIFETIME_SECONDS
+(3600), refreshed on call start/reconnect. Existing TURN_PASSWORD is accepted
+as a migration fallback for the shared secret; replace it with TURN_SHARED_SECRET.
+
+TURN_USER_QUOTA/TURN_TOTAL_QUOTA default to 8/100 allocations. TURN_MAX_BPS and
+TURN_BPS_CAPACITY default to 2000000 and 20000000 bytes/second respectively.
+Private, link-local and loopback peers are denied; TURN_ALLOWED_PEER_RANGE can
+permit your specific VPN subnet when needed. It defaults to TURN_EXTERNAL_IP.
+Recreate containers after changing environment values.
+
+Identity inactivity and cleanup
+
+After IDENTITY_INACTIVE_DAYS (7), identities appear under the collapsed
+"Inactive identities" section. Their chats remain accessible. A successfully
+authenticated request updates activity and restores the identity to the main list.
+Receiving messages alone does not keep an identity active.
+
+After IDENTITY_CLEANUP_DAYS (90) without authenticated activity, the server
+permanently deletes that identity and all messages to/from it, including the
+other participant's copy, plus its calls, signals, invitations and nonces.
+Older messages between retained identities are preserved. Browser exports and
+external backups are outside this cleanup. Returning after deletion requires
+a new invitation; importing the old bundle does not restore deleted history.
+
+Cleanup runs at startup and every IDENTITY_CLEANUP_INTERVAL_SECONDS (3600),
+processing at most IDENTITY_CLEANUP_BATCH_SIZE (100) identities per pass.
+Deletion is transactional and serialized against authenticated activity.
+Pydantic requires positive settings and cleanup days greater than inactive days.
+Expired invitations and nonces are also pruned. Cleanup never reopens bootstrap,
+even when the last identity expires; an empty previously used node requires
+operator recovery rather than accepting the old bootstrap token again.

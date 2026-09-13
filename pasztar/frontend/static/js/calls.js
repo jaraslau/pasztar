@@ -57,12 +57,8 @@ export function isPolitePeer() {
 }
 
 export async function loadCallConfig() {
-  if (state.callConfigLoaded) {
-    return;
-  }
   const config = await apiJson(await signedFetch("/calls/config"));
   state.callIceServers = config.ice_servers || [];
-  state.callConfigLoaded = true;
 }
 
 export function updateCallButtons() {
@@ -453,6 +449,7 @@ export async function reconnectCall() {
   state.callRestarting = true;
   try {
     status("Reconnecting call.");
+    await loadCallConfig();
     closePeerConnection();
     createPeerConnection();
     await sendCallState();

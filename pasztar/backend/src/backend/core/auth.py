@@ -6,7 +6,7 @@ from typing import Annotated
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from fastapi import Depends, Header, HTTPException, Request, status
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -62,6 +62,18 @@ async def require_client(
         )
     except (InvalidSignature, ValueError, binascii.Error) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad signature") from exc
+
+    # Serialize activity against cleanup; never revive a deleted or rotated key.
+    touched = db.execute(
+        update(Client)
+        .where(Client.id == client.id, Client.public_key == client.public_key)
+        .values(last_seen=now())
+    )
+    if not touched.rowcount:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "identity no longer available"
+        )
 
     # A future-dated signature remains valid for up to twice the allowed skew.
     db.execute(delete(Nonce).where(Nonce.created_at < now() - 2 * max_skew))

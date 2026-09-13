@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -5,6 +6,7 @@ from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from backend.core.cleanup import cleanup_loop
 from backend.core.settings import settings
 from backend.routers import calls, clients, events, health, messages
 
@@ -21,9 +23,13 @@ async def db_lifespan(app: FastAPI) -> AsyncIterator[None]:
         autoflush=False,
         expire_on_commit=False,
     )
+    stop = asyncio.Event()
+    cleanup = asyncio.create_task(cleanup_loop(app.state.session_factory, stop))
     try:
         yield
     finally:
+        stop.set()
+        await cleanup
         engine.dispose()
 
 

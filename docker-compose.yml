@@ -5,6 +5,8 @@ services:
       dockerfile: dockerfile.backend
     env_file:
       - .env
+    environment:
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-${TURN_PASSWORD:?Set TURN_SHARED_SECRET}}
     ports:
       - "${API_PORT}:${APP_PORT}"
     depends_on:
@@ -15,6 +17,18 @@ services:
     build:
       context: .
       dockerfile: dockerfile.frontend
+    environment:
+      APP_PORT: ${APP_PORT:-8000}
+      TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-127.0.0.1/32}
+      API_MAX_BODY_BYTES: ${API_MAX_BODY_BYTES:-524288}
+      MESSAGE_MAX_BODY_BYTES: ${MESSAGE_MAX_BODY_BYTES:-178257920}
+      CLIENT_BODY_TIMEOUT_SECONDS: ${CLIENT_BODY_TIMEOUT_SECONDS:-30}
+      API_REQUEST_RATE: ${API_REQUEST_RATE:-10r/s}
+      API_REQUEST_BURST: ${API_REQUEST_BURST:-30}
+      REGISTRATION_REQUEST_RATE: ${REGISTRATION_REQUEST_RATE:-5r/m}
+      REGISTRATION_REQUEST_BURST: ${REGISTRATION_REQUEST_BURST:-5}
+      API_CONNECTIONS_PER_IP: ${API_CONNECTIONS_PER_IP:-20}
+      EVENT_PROXY_TIMEOUT_SECONDS: ${EVENT_PROXY_TIMEOUT_SECONDS:-75}
     ports:
       - "${FRONTEND_PORT}:80"
     depends_on:
@@ -25,9 +39,25 @@ services:
     command:
       - -n
       - --log-file=stdout
-      - --lt-cred-mech
+      - --use-auth-secret
       - --realm=${TURN_REALM}
-      - --user=${TURN_USER}:${TURN_PASSWORD}
+      - --static-auth-secret=${TURN_SHARED_SECRET:-${TURN_PASSWORD:?Set TURN_SHARED_SECRET}}
+      - --user-quota=${TURN_USER_QUOTA:-8}
+      - --total-quota=${TURN_TOTAL_QUOTA:-100}
+      - --max-bps=${TURN_MAX_BPS:-2000000}
+      - --bps-capacity=${TURN_BPS_CAPACITY:-20000000}
+      - --no-multicast-peers
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - "--denied-peer-ip=::"
+      - "--denied-peer-ip=::1"
+      - "--denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
+      - "--denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
+      - --allowed-peer-ip=${TURN_ALLOWED_PEER_RANGE:-${TURN_EXTERNAL_IP}}
       - --listening-port=3478
       - --min-port=${TURN_RELAY_PORT_MIN}
       - --max-port=${TURN_RELAY_PORT_MAX}

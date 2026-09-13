@@ -1,10 +1,20 @@
 import base64
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    computed_field,
+    field_validator,
+)
+
+from backend.core.db.models import now
+from backend.core.settings import settings
 
 
 class ClientUpdate(BaseModel):
@@ -53,6 +63,14 @@ class ClientOut(BaseModel):
     encryption_public_key: str | None
     fingerprint: str
     last_seen: datetime
+
+    @computed_field
+    @property
+    def inactive(self) -> bool:
+        last_seen = self.last_seen
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=UTC)
+        return last_seen < now() - timedelta(days=settings.identity_inactive_days)
 
 
 class HeartbeatOut(BaseModel):

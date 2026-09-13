@@ -67,6 +67,32 @@ EXTRA_VALUE=ignored"""
     assert settings.message_list_max_limit == 34
 
 
+def test_retention_and_security_settings_from_environment(monkeypatch):
+    for key, value in {
+        "IDENTITY_INACTIVE_DAYS": "8",
+        "IDENTITY_CLEANUP_DAYS": "60",
+        "IDENTITY_CLEANUP_INTERVAL_SECONDS": "15",
+        "IDENTITY_CLEANUP_BATCH_SIZE": "3",
+        "TURN_CREDENTIALS_LIFETIME_SECONDS": "120",
+        "INVITATION_LIFETIME_HOURS": "12",
+        "EVENT_KEEPALIVE_SECONDS": "10",
+    }.items():
+        monkeypatch.setenv(key, value)
+    config = Settings(_env_file=None)
+    assert (config.identity_inactive_days, config.identity_cleanup_days) == (8, 60)
+    assert (
+        config.identity_cleanup_interval_seconds,
+        config.identity_cleanup_batch_size,
+    ) == (15, 3)
+    assert config.turn_credentials_lifetime_seconds == 120
+    assert config.invitation_lifetime_hours == 12
+    assert config.event_keepalive_seconds == 10
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, identity_cleanup_days=8)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, identity_cleanup_interval_seconds=0)
+
+
 def test_settings_requires_database_url(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
 

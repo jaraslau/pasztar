@@ -156,7 +156,13 @@
             </button>
           </div>
           <p id="app-status" class="status"></p>
-          <div id="clients" class="clients"></div>
+          <div class="client-directory">
+            <div id="clients" class="clients"></div>
+            <details id="inactive-section" hidden>
+              <summary id="inactive-summary">Inactive identities</summary>
+              <div id="inactive-clients" class="clients"></div>
+            </details>
+          </div>
         </section>
       </aside>
 

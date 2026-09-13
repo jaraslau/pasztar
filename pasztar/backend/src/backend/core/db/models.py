@@ -120,3 +120,4 @@ Index(
     CallSignal.created_at,
 )
 Index("ix_nonces_created", Nonce.created_at)
+Index("ix_clients_last_seen", Client.last_seen)

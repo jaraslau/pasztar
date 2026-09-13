@@ -1199,6 +1199,8 @@ export async function renderMessagesFromState({
 
 export function renderClients() {
   els.clients.replaceChildren();
+  els.inactiveClients.replaceChildren();
+  let inactiveCount = 0;
   const clients = [...state.clients].sort(
     (a, b) => Number(isClientOnline(b)) - Number(isClientOnline(a)),
   );
@@ -1243,6 +1245,10 @@ export function renderClients() {
         await hooks.afterClientSelected?.();
       })().catch((error) => status(error.message, true));
     });
-    els.clients.append(node);
+    const inactive = client.inactive && !isSelf;
+    if (inactive) inactiveCount += 1;
+    (inactive ? els.inactiveClients : els.clients).append(node);
   }
+  els.inactiveSection.hidden = inactiveCount === 0;
+  els.inactiveSummary.textContent = `Inactive identities (${inactiveCount})`;
 }

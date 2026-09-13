@@ -36,6 +36,10 @@ if [ -z "$token" ] || [ "$rotate" = true ]; then
   set_env BOOTSTRAP_TOKEN "$token"
 fi
 set_env TRUSTED_IDENTITIES true
+turn_secret="$(get_env TURN_SHARED_SECRET || true)"
+if [ -z "$turn_secret" ] || [ "$turn_secret" = "change-me" ]; then
+  set_env TURN_SHARED_SECRET "$(openssl rand -hex 32)"
+fi
 
 case "$host" in
   http://*|https://*) url_base="$host" ;;

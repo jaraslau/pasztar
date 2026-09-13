@@ -374,6 +374,20 @@ label,
   color: var(--danger);
 }
 
+.client-directory {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+#inactive-section {
+  margin-top: 16px;
+}
+
+#inactive-section summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+
 .clients {
   display: grid;
   align-content: start;

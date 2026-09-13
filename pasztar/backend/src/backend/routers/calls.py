@@ -1,7 +1,10 @@
+import base64
+import hashlib
+import hmac
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -36,8 +39,26 @@ CurrentClient = Annotated[Client, Depends(require_client)]
 
 
 @router.get("/calls/config", response_model=CallConfigOut)
-def call_config(_: CurrentClient) -> CallConfigOut:
-    return CallConfigOut(ice_servers=settings.call_ice_servers)
+def call_config(client: CurrentClient, response: Response) -> CallConfigOut:
+    response.headers["Cache-Control"] = "no-store"
+    servers = [dict(server) for server in settings.call_ice_servers]
+    if settings.turn_shared_secret:
+        expires = int(now().timestamp()) + settings.turn_credentials_lifetime_seconds
+        username = f"{expires}:{client.id}"
+        credential = base64.b64encode(
+            hmac.digest(
+                settings.turn_shared_secret.get_secret_value().encode(),
+                username.encode(),
+                hashlib.sha1,
+            )
+        ).decode()
+        for server in servers:
+            urls = server.get("urls", [])
+            if isinstance(urls, str):
+                urls = [urls]
+            if any(url.startswith(("turn:", "turns:")) for url in urls):
+                server.update(username=username, credential=credential)
+    return CallConfigOut(ice_servers=servers)
 
 
 @router.post("/calls", response_model=CallOut, status_code=status.HTTP_201_CREATED)

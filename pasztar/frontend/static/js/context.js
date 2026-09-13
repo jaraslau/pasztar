@@ -42,7 +42,6 @@ export const state = {
   forwardingMessages: [],
   forwardingSending: false,
   calls: [],
-  callConfigLoaded: false,
   callIceServers: [],
   declinedCallIds: new Set(),
   activeCall: null,
@@ -81,6 +80,9 @@ if (!savedIdentity) {
 export const els = {
   appStatus: document.querySelector("#app-status"),
   clients: document.querySelector("#clients"),
+  inactiveClients: document.querySelector("#inactive-clients"),
+  inactiveSection: document.querySelector("#inactive-section"),
+  inactiveSummary: document.querySelector("#inactive-summary"),
   refreshClients: document.querySelector("#refresh-clients"),
   openSettings: document.querySelector("#open-settings"),
   closeSettings: document.querySelector("#close-settings"),
