@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from backend.core.auth import require_client
 from backend.core.db.models import Client
 from backend.core.events import events
+from backend.core.settings import settings
 
 router = APIRouter()
 CurrentClient = Annotated[Client, Depends(require_client)]
@@ -23,9 +24,15 @@ async def stream_events(
             yield "event: ready\ndata: {}\n\n"
             while not await request.is_disconnected():
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=25)
+                    event = await asyncio.wait_for(
+                        queue.get(), timeout=settings.event_keepalive_seconds
+                    )
                     yield f"event: {event}\ndata: {{}}\n\n"
                 except TimeoutError:
                     yield ": keepalive\n\n"
 
-    return StreamingResponse(stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-store"},
+    )

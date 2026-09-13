@@ -1,14 +1,37 @@
+import base64
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
-class ClientCreate(BaseModel):
+class ClientUpdate(BaseModel):
     id: str = Field(min_length=1, max_length=80)
     display_name: str = Field(min_length=1, max_length=120)
-    public_key: str = Field(min_length=1)
-    encryption_public_key: str = Field(min_length=1)
+    public_key: str = Field(min_length=1, max_length=44)
+    encryption_public_key: str = Field(min_length=1, max_length=124)
+
+    @field_validator("public_key", "encryption_public_key")
+    @classmethod
+    def validate_key(cls, value, info):
+        # These lengths/formats are fixed by Ed25519 and P-256 SPKI, not policy.
+        raw = base64.b64decode(value, validate=True)
+        if base64.b64encode(raw).decode() != value:
+            raise ValueError("public key must use canonical base64")
+        if info.field_name == "public_key":
+            ed25519.Ed25519PublicKey.from_public_bytes(raw)
+        else:
+            key = serialization.load_der_public_key(raw)
+            if not isinstance(key, ec.EllipticCurvePublicKey) or not isinstance(
+                key.curve, ec.SECP256R1
+            ):
+                raise ValueError("encryption key must be P-256 SPKI")
+        return value
+
+
+class ClientCreate(ClientUpdate):
     admission_token: SecretStr | None = Field(default=None, max_length=512)
 
 
@@ -19,13 +42,6 @@ class RegistrationOut(BaseModel):
 class InvitationOut(BaseModel):
     token: str
     expires_at: datetime
-
-
-class ClientUpdate(BaseModel):
-    id: str = Field(min_length=1, max_length=80)
-    display_name: str = Field(min_length=1, max_length=120)
-    public_key: str = Field(min_length=1)
-    encryption_public_key: str = Field(min_length=1)
 
 
 class ClientOut(BaseModel):

@@ -16,10 +16,10 @@ from backend.core.settings import settings
 from backend.core.signing import signature_payload
 
 Db = Annotated[Session, Depends(get_db)]
-ClientIdHeader = Annotated[str, Header(alias="X-Client-Id")]
-TimestampHeader = Annotated[str, Header(alias="X-Timestamp")]
-NonceHeader = Annotated[str, Header(alias="X-Nonce")]
-SignatureHeader = Annotated[str, Header(alias="X-Signature")]
+ClientIdHeader = Annotated[str, Header(alias="X-Client-Id", max_length=80)]
+TimestampHeader = Annotated[str, Header(alias="X-Timestamp", max_length=64)]
+NonceHeader = Annotated[str, Header(alias="X-Nonce", min_length=1, max_length=120)]
+SignatureHeader = Annotated[str, Header(alias="X-Signature", max_length=88)]
 
 
 async def require_client(
@@ -51,7 +51,7 @@ async def require_client(
         if request.url.query:
             target = f"{target}?{request.url.query}"
         key.verify(
-            base64.b64decode(signature),
+            base64.b64decode(signature, validate=True),
             signature_payload(
                 request.method,
                 target,
@@ -63,7 +63,8 @@ async def require_client(
     except (InvalidSignature, ValueError, binascii.Error) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad signature") from exc
 
-    db.execute(delete(Nonce).where(Nonce.created_at < now() - max_skew))
+    # A future-dated signature remains valid for up to twice the allowed skew.
+    db.execute(delete(Nonce).where(Nonce.created_at < now() - 2 * max_skew))
     db.add(Nonce(client_id=client.id, nonce=nonce))
     try:
         db.commit()

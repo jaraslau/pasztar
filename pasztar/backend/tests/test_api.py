@@ -15,6 +15,8 @@ from backend.core.signing import signature_payload
 from backend.routers import calls as calls_router
 from backend.routers import clients as clients_router
 from backend.schemas.messages import MessageCreate
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -55,6 +57,15 @@ def keypair():
     return private, base64.b64encode(public).decode()
 
 
+def encryption_key():
+    key = ec.generate_private_key(ec.SECP256R1()).public_key()
+    return base64.b64encode(
+        key.public_bytes(
+            serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    ).decode()
+
+
 def register_client(
     client_id: str,
     display_name: str,
@@ -62,7 +73,7 @@ def register_client(
     encryption_public_key: str | None = None,
 ) -> str:
     if encryption_public_key is None:
-        _, encryption_public_key = keypair()
+        encryption_public_key = encryption_key()
     response = client.post(
         "/clients",
         json={
@@ -82,7 +93,7 @@ def test_register_is_idempotent_for_same_identity(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(clients_router.events, "publish", published.append)
 
     _, alice_public = keypair()
-    _, alice_encryption_public = keypair()
+    alice_encryption_public = encryption_key()
     payload = {
         "id": "alice",
         "display_name": "Alice",
@@ -102,7 +113,7 @@ def test_register_is_idempotent_for_same_identity(monkeypatch: pytest.MonkeyPatc
 
 def test_register_rejects_same_id_with_different_identity_data():
     _, alice_public = keypair()
-    _, alice_encryption_public = keypair()
+    alice_encryption_public = encryption_key()
     first = client.post(
         "/clients",
         json={
@@ -115,7 +126,7 @@ def test_register_rejects_same_id_with_different_identity_data():
     assert first.status_code == 201
 
     _, other_public = keypair()
-    _, other_encryption_public = keypair()
+    other_encryption_public = encryption_key()
     changes = [
         {"display_name": "Alicia"},
         {"public_key": other_public},
@@ -206,7 +217,7 @@ def test_auth_prunes_expired_nonces():
                 client_id="alice",
                 nonce="expired",
                 created_at=datetime.now(UTC)
-                - timedelta(seconds=settings.signature_max_skew_seconds + 1),
+                - timedelta(seconds=2 * settings.signature_max_skew_seconds + 1),
             )
         )
         session.commit()
@@ -604,3 +615,67 @@ def test_client_directory_exposes_encryption_keys():
     assert clients["alice"]["encryption_public_key"] == alice_encryption_public
     assert clients["bob"]["encryption_public_key"] == bob_encryption_public
     assert "private" not in str(response.json()).lower()
+
+
+def test_future_timestamp_cannot_be_replayed_after_one_skew_window(monkeypatch):
+    private, public = keypair()
+    register_client("alice", "Alice", public)
+    start = datetime.now(UTC)
+    skew = settings.signature_max_skew_seconds
+    headers = signed(
+        "POST",
+        "/heartbeat",
+        b"",
+        "alice",
+        private,
+        timestamp=(start + timedelta(seconds=skew - 1)).isoformat(),
+    )
+    monkeypatch.setattr("backend.core.auth.now", lambda: start)
+    assert client.post("/heartbeat", headers=headers).status_code == 200
+    monkeypatch.setattr(
+        "backend.core.auth.now", lambda: start + timedelta(seconds=skew + 1)
+    )
+    assert client.post("/heartbeat", headers=headers).status_code == 401
+
+
+def test_invalid_keys_and_nonce_are_rejected_without_changing_identity():
+    private, public = keypair()
+    encryption = register_client("alice", "Alice", public)
+    payload = {
+        "id": "alice",
+        "display_name": "Alice",
+        "public_key": public,
+        "encryption_public_key": encryption,
+    }
+    for field, value in (
+        ("public_key", "invalid"),
+        ("public_key", encryption),
+        ("encryption_public_key", public),
+        ("encryption_public_key", "invalid"),
+    ):
+        invalid = {**payload, field: value}
+        assert client.post("/clients", json=invalid).status_code == 422
+        body = json.dumps(invalid).encode()
+        assert (
+            client.patch(
+                "/clients/me",
+                content=body,
+                headers=signed("PATCH", "/clients/me", body, "alice", private),
+            ).status_code
+            == 422
+        )
+    assert (
+        client.get(
+            "/clients", headers=signed("GET", "/clients", b"", "alice", private)
+        ).json()[0]["public_key"]
+        == public
+    )
+    assert (
+        client.post(
+            "/heartbeat",
+            headers=signed(
+                "POST", "/heartbeat", b"", "alice", private, nonce="n" * 121
+            ),
+        ).status_code
+        == 422
+    )

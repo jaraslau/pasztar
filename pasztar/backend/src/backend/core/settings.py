@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     bootstrap_token: str | None = None
     app_host: str = "0.0.0.0"
     app_port: int = 8000
-    signature_max_skew_seconds: int = 300
+    signature_max_skew_seconds: int = Field(default=300, gt=0)
+    invitation_lifetime_hours: int = Field(default=24, gt=0)
+    event_keepalive_seconds: int = Field(default=25, gt=0)
     call_ice_servers: list[dict[str, Any]] = Field(default_factory=list)
     call_stale_after_seconds: int = 45
     call_signal_stale_after_seconds: int = 600

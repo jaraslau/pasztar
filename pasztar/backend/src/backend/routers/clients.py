@@ -57,7 +57,7 @@ def create_invitation(
             "Registration is open; no invitation is needed.",
         )
     token = secrets.token_urlsafe(32)
-    expires_at = now() + timedelta(hours=24)
+    expires_at = now() + timedelta(hours=settings.invitation_lifetime_hours)
     db.add(
         Invitation(
             token_hash=hashlib.sha256(token.encode()).hexdigest(),

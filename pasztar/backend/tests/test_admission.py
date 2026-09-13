@@ -38,7 +38,7 @@ def admission_db(tmp_path, monkeypatch):
 
 def identity(client_id, token=None):
     private, public = api.keypair()
-    _, encryption = api.keypair()
+    encryption = api.encryption_key()
     return private, {
         "id": client_id,
         "display_name": client_id,
