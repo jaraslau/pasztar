@@ -1,6 +1,15 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -22,6 +31,25 @@ class Client(Base):
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class BootstrapState(Base):
+    __tablename__ = "bootstrap_state"
+    __table_args__ = (CheckConstraint("id = 1"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    consumed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
+class Invitation(Base):
+    __tablename__ = "invitations"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    creator_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    redeemed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Message(Base):

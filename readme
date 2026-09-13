@@ -5,13 +5,14 @@ I wanted to finally make something out of it so I went with a node/local access 
 You host it on your VPS and connect over the VPN like WireGuard or Tailscale.
 
 VPN-only deployment is strongly preferred
+If latency issues occur, trusted identities can be enabled and served over the internet.
 
 The app is served by Docker Compose. The browser still
 needs HTTPS because WebCrypto is unavailable on plain HTTP origins.
 
 1. Configure env:
 
-  cp .env.example .env
+  ./scripts/setup-bootstrap-token.sh pasztar.example.com
 
 Use the WireGuard server IP for the app bindings:
 
@@ -52,6 +53,25 @@ Use the same WireGuard IP for TURN:
 6. Open the app while connected to WireGuard:
 
   https://pasztar.example.com
+
+Joining and inviting users
+
+With TRUSTED_IDENTITIES=true, open the setup URL printed by the bootstrap script,
+or paste its token into the setup page, and create the first identity. The token
+is consumed once. In Settings, choose "Invite someone" and copy the invitation
+link to share it yourself. Each invitation admits one identity and expires after
+24 hours. Anyone holding the link can redeem it, and every admitted user can
+invite others. Recipients still need VPN access to reach the app.
+
+Already-registered identities retain access and can invite users when trusted
+mode is enabled. Importing an existing identity bundle needs no new token.
+TRUSTED_IDENTITIES=false keeps registration open and hides invitation controls.
+
+The bootstrap script's --rotate option replaces an unused bootstrap token;
+restart/recreate the backend to load the new environment. Rotation or a server
+restart does not reopen bootstrap after an identity has joined. Export your
+identity bundle from Settings for recovery. An empty trusted server without a
+BOOTSTRAP_TOKEN rejects registration until the operator configures one.
 
 If the page returns 403 while connected to WireGuard, browser traffic is reaching
 Caddy from a public IP instead of 10.8.0.0/24. Use full-tunnel WireGuard, route

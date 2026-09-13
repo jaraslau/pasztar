@@ -1,3 +1,6 @@
+import hashlib
+import secrets
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -6,21 +9,65 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.core.auth import require_client
-from backend.core.db.models import Client, now
+from backend.core.db.models import BootstrapState, Client, Invitation, now
 from backend.core.db.session import get_db
 from backend.core.events import events
-from backend.core.helpers.clients import existing_registration
+from backend.core.helpers.clients import admission_error, existing_registration
+from backend.core.settings import settings
 from backend.core.signing import fingerprint
 from backend.schemas.clients import (
     ClientCreate,
     ClientOut,
     ClientUpdate,
     HeartbeatOut,
+    InvitationOut,
+    RegistrationOut,
 )
 
 router = APIRouter()
 Db = Annotated[Session, Depends(get_db)]
 CurrentClient = Annotated[Client, Depends(require_client)]
+
+
+@router.get("/registration", response_model=RegistrationOut)
+def registration(db: Db, response: Response) -> RegistrationOut:
+    response.headers["Cache-Control"] = "no-store"
+    if not settings.trusted_identities:
+        return RegistrationOut(mode="open")
+    bootstrap = db.get(BootstrapState, 1)
+    if bootstrap is None or bootstrap.consumed or db.scalar(select(Client.id).limit(1)):
+        return RegistrationOut(mode="invitation")
+    if not settings.bootstrap_token:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Server setup is incomplete: ask the operator to configure BOOTSTRAP_TOKEN.",
+        )
+    return RegistrationOut(mode="bootstrap")
+
+
+@router.post(
+    "/invitations", response_model=InvitationOut, status_code=status.HTTP_201_CREATED
+)
+def create_invitation(
+    db: Db, client: CurrentClient, response: Response
+) -> InvitationOut:
+    if not settings.trusted_identities:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Registration is open; no invitation is needed.",
+        )
+    token = secrets.token_urlsafe(32)
+    expires_at = now() + timedelta(hours=24)
+    db.add(
+        Invitation(
+            token_hash=hashlib.sha256(token.encode()).hexdigest(),
+            creator_id=client.id,
+            expires_at=expires_at,
+        )
+    )
+    db.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return InvitationOut(token=token, expires_at=expires_at)
 
 
 @router.post(
@@ -35,6 +82,13 @@ def register_client(
 ) -> Client:
     if existing := db.get(Client, payload.id):
         return existing_registration(existing, payload, response)
+
+    if error := admission_error(db, payload):
+        db.rollback()
+        # A concurrent request may have completed this exact registration.
+        if existing := db.get(Client, payload.id):
+            return existing_registration(existing, payload, response)
+        raise HTTPException(status.HTTP_403_FORBIDDEN, error)
 
     client = Client(
         id=payload.id,

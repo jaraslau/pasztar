@@ -145,10 +145,46 @@ async function loadMediaInputs() {
 async function openSettings() {
   await loadMediaInputs();
   els.settingsModal.showModal();
+  const { mode } = await apiJson(
+    await fetch("/api/registration", { cache: "no-store" }),
+  );
+  els.invitations.hidden = mode === "open";
 }
 
 function closeSettings() {
   els.settingsModal.close();
+}
+
+async function createInvitation() {
+  els.createInvitation.disabled = true;
+  els.invitationStatus.textContent = "";
+  els.invitationStatus.classList.remove("error");
+  try {
+    const { token, expires_at } = await apiJson(
+      await signedFetch("/invitations", { method: "POST" }),
+    );
+    const link = new URL("/setup.html", location.origin);
+    link.hash = new URLSearchParams({ invite: token }).toString();
+    els.invitationLink.value = link.href;
+    els.invitationResult.hidden = false;
+    els.invitationStatus.textContent = `Single use. Expires ${new Date(expires_at).toLocaleString()}. Anyone with this link can join.`;
+  } catch (error) {
+    els.invitationStatus.textContent = error.message;
+    els.invitationStatus.classList.add("error");
+  } finally {
+    els.createInvitation.disabled = false;
+  }
+}
+
+async function copyInvitation() {
+  try {
+    await navigator.clipboard.writeText(els.invitationLink.value);
+    els.copyInvitation.textContent = "Copied";
+  } catch {
+    els.invitationLink.focus();
+    els.invitationLink.select();
+    els.copyInvitation.textContent = "Select and copy the link";
+  }
 }
 
 function mediaStatus(error) {
@@ -279,6 +315,11 @@ els.openSettings.addEventListener("click", () => {
   openSettings().catch((error) => status(error.message, true));
 });
 els.closeSettings.addEventListener("click", closeSettings);
+els.createInvitation.addEventListener("click", () => {
+  els.copyInvitation.textContent = "Copy link";
+  createInvitation();
+});
+els.copyInvitation.addEventListener("click", copyInvitation);
 els.audioInput.addEventListener("change", () => {
   state.selectedAudioInputId = els.audioInput.value;
   saveMediaInputs();

@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     database_url: str
     debug_mode: bool = False
+    trusted_identities: bool = False
+    bootstrap_token: str | None = None
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     signature_max_skew_seconds: int = 300

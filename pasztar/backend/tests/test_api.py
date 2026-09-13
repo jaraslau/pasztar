@@ -8,7 +8,7 @@ os.environ["DATABASE_URL"] = "sqlite://"
 
 import pytest
 from backend.app import app
-from backend.core.db.models import Base, Nonce
+from backend.core.db.models import Base, BootstrapState, Nonce
 from backend.core.db.session import get_db
 from backend.core.settings import settings
 from backend.core.signing import signature_payload
@@ -40,9 +40,13 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def reset_db():
+def reset_db(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(settings, "trusted_identities", False)
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        db.add(BootstrapState(id=1, consumed=False))
+        db.commit()
 
 
 def keypair():

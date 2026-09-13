@@ -30,8 +30,20 @@
             required
           />
         </label>
-        <button id="register" type="submit">Register</button>
-        <p id="setup-status" class="status"></p>
+        <label id="admission-field" hidden>
+          Bootstrap or invitation token
+          <input
+            id="admission-token"
+            name="admission-token"
+            type="password"
+            autocomplete="off"
+            maxlength="512"
+            aria-describedby="admission-help"
+          />
+        </label>
+        <p id="admission-help" class="status" aria-live="polite"></p>
+        <button id="register" type="submit" disabled>Register</button>
+        <p id="setup-status" class="status" role="status"></p>
         <div class="splitter"></div>
         <label>
           Identity bundle

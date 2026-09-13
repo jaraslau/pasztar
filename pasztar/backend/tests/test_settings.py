@@ -17,6 +17,8 @@ def test_settings_loads_env_file(
         "APP_HOST",
         "APP_PORT",
         "DEBUG_MODE",
+        "TRUSTED_IDENTITIES",
+        "BOOTSTRAP_TOKEN",
         "SIGNATURE_MAX_SKEW_SECONDS",
         "CALL_ICE_SERVERS",
         "CALL_STALE_AFTER_SECONDS",
@@ -34,6 +36,8 @@ def test_settings_loads_env_file(
 APP_HOST=127.0.0.1
 APP_PORT=9000
 DEBUG_MODE=true
+TRUSTED_IDENTITIES=true
+BOOTSTRAP_TOKEN=bootstrap-secret
 SIGNATURE_MAX_SKEW_SECONDS=42
 CALL_ICE_SERVERS=[{"urls":"stun:stun.example.test:3478"}]
 CALL_STALE_AFTER_SECONDS=44
@@ -51,6 +55,8 @@ EXTRA_VALUE=ignored"""
     assert settings.app_host == "127.0.0.1"
     assert settings.app_port == 9000
     assert settings.debug_mode is True
+    assert settings.trusted_identities is True
+    assert settings.bootstrap_token == "bootstrap-secret"
     assert settings.signature_max_skew_seconds == 42
     assert settings.call_ice_servers == [{"urls": "stun:stun.example.test:3478"}]
     assert settings.call_stale_after_seconds == 44

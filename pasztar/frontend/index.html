@@ -458,6 +458,21 @@
         </button>
       </div>
       <p id="identity-summary" class="status"></p>
+      <div id="invitations" hidden>
+        <button id="create-invitation" type="button" class="secondary">
+          Invite someone
+        </button>
+        <div id="invitation-result" hidden>
+          <label>
+            Invitation link
+            <input id="invitation-link" type="text" readonly />
+          </label>
+          <button id="copy-invitation" type="button" class="secondary">
+            Copy link
+          </button>
+        </div>
+        <p id="invitation-status" class="status" role="status"></p>
+      </div>
       <div class="media-inputs">
         <label>
           Microphone

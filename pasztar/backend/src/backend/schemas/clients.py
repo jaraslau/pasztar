@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 
 class ClientCreate(BaseModel):
@@ -8,6 +9,16 @@ class ClientCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=120)
     public_key: str = Field(min_length=1)
     encryption_public_key: str = Field(min_length=1)
+    admission_token: SecretStr | None = Field(default=None, max_length=512)
+
+
+class RegistrationOut(BaseModel):
+    mode: Literal["open", "bootstrap", "invitation"]
+
+
+class InvitationOut(BaseModel):
+    token: str
+    expires_at: datetime
 
 
 class ClientUpdate(BaseModel):

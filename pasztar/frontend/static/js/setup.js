@@ -16,7 +16,22 @@ const els = {
   displayName: document.querySelector("#display-name"),
   identityImport: document.querySelector("#identity-import"),
   setupStatus: document.querySelector("#setup-status"),
+  admissionField: document.querySelector("#admission-field"),
+  admissionToken: document.querySelector("#admission-token"),
+  admissionHelp: document.querySelector("#admission-help"),
+  register: document.querySelector("#register"),
 };
+
+function readAdmissionLink() {
+  const fragment = new URLSearchParams(location.hash.slice(1));
+  if (fragment.has("bootstrap") || fragment.has("invite")) {
+    els.admissionToken.value =
+      fragment.get("bootstrap") || fragment.get("invite") || "";
+    history.replaceState(null, "", location.pathname + location.search);
+  }
+}
+readAdmissionLink();
+window.addEventListener("hashchange", readAdmissionLink);
 
 if (localStorage.getItem(storeKey)) {
   location.replace("/");
@@ -26,6 +41,22 @@ function status(text, error = false) {
   els.setupStatus.textContent = text;
   els.setupStatus.classList.toggle("error", error);
 }
+
+async function loadRegistration() {
+  const { mode } = await apiJson(
+    await fetch("/api/registration", { cache: "no-store" }),
+  );
+  els.admissionField.hidden = mode === "open";
+  els.admissionHelp.textContent =
+    mode === "bootstrap"
+      ? "Enter the server's bootstrap token to create the first identity."
+      : mode === "invitation"
+        ? "Ask an existing user for an invitation link or token."
+        : "Registration is open.";
+  els.register.disabled = false;
+}
+
+loadRegistration().catch((error) => status(error.message, true));
 
 function requireString(bundle, key) {
   if (typeof bundle[key] !== "string" || !bundle[key].trim()) {
@@ -136,6 +167,7 @@ async function register(identity) {
       display_name: identity.displayName,
       public_key: identity.publicKey,
       encryption_public_key: identity.encryptionPublicKey,
+      admission_token: els.admissionToken.value.trim() || undefined,
     }),
   });
   if (response.status === 409) {
@@ -146,6 +178,9 @@ async function register(identity) {
 
 els.identityForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (els.register.disabled) return;
+  els.register.disabled = true;
+  status("");
   try {
     const clientId = els.clientId.value.trim();
     const displayName = els.displayName.value.trim();
@@ -157,6 +192,8 @@ els.identityForm.addEventListener("submit", async (event) => {
     saveBundle(identity);
   } catch (error) {
     status(error.message, true);
+  } finally {
+    els.register.disabled = false;
   }
 });
 
