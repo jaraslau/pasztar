@@ -851,6 +851,26 @@ export function renderForwardedFrom(message, payload) {
   return forwarded;
 }
 
+function waveformMask(buffer) {
+  const peaks = Array(48).fill(0);
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const samples = buffer.getChannelData(channel);
+    for (let index = 0; index < samples.length; index += 1) {
+      const bar = Math.floor((index * peaks.length) / samples.length);
+      peaks[bar] = Math.max(peaks[bar], Math.abs(samples[index]));
+    }
+  }
+  const maximum = Math.max(...peaks) || 1;
+  const path = peaks
+    .map((peak, index) => {
+      const height = 3 + (peak / maximum) * 25;
+      return `M${index * 5 + 2.5} ${16 - height / 2}v${height}`;
+    })
+    .join(" ");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 32" preserveAspectRatio="none"><path d="${path}" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
 export async function renderMessageBody(message, payload) {
   if (payload.kind === "call_event") {
     if (!["started", "ended"].includes(payload.event)) {
@@ -903,28 +923,23 @@ export async function renderMessageBody(message, payload) {
     const duration = buffer.duration || payload.durationMs / 1000;
     const player = document.createElement("div");
     const button = document.createElement("button");
-    const rewind = document.createElement("button");
-    const forward = document.createElement("button");
+    const waveform = document.createElement("div");
     const seek = document.createElement("input");
     const time = document.createElement("span");
     let source = null;
     let startedAt = 0;
     let offset = 0;
     let frame = 0;
+    let playing = false;
+    let playbackVersion = 0;
 
     player.className = "voice-player";
     button.type = "button";
     button.className = "voice-play";
     button.setAttribute("aria-label", "Play voice message");
     setPlaybackIcon(button, "play");
-    rewind.type = "button";
-    rewind.className = "voice-step";
-    rewind.setAttribute("aria-label", "Rewind 5 seconds");
-    setPlaybackIcon(rewind, "rewind");
-    forward.type = "button";
-    forward.className = "voice-step";
-    forward.setAttribute("aria-label", "Forward 5 seconds");
-    setPlaybackIcon(forward, "forward");
+    waveform.className = "voice-waveform";
+    waveform.style.setProperty("--waveform-mask", waveformMask(buffer));
     seek.type = "range";
     seek.className = "voice-seek";
     seek.min = "0";
@@ -933,7 +948,6 @@ export async function renderMessageBody(message, payload) {
     seek.value = "0";
     seek.setAttribute("aria-label", "Voice message position");
     time.className = "voice-time";
-    time.textContent = `0:00 / ${formatPlaybackTime(duration)}`;
 
     const currentTime = () =>
       source
@@ -945,7 +959,17 @@ export async function renderMessageBody(message, payload) {
     const renderTime = () => {
       const current = currentTime();
       seek.value = String(current);
-      time.textContent = `${formatPlaybackTime(current)} / ${formatPlaybackTime(duration)}`;
+      seek.setAttribute(
+        "aria-valuetext",
+        `${formatPlaybackTime(current)} of ${formatPlaybackTime(duration)}`,
+      );
+      waveform.style.setProperty(
+        "--voice-progress",
+        `${(current / duration) * 100}%`,
+      );
+      time.textContent = formatPlaybackTime(
+        playing || current > 0 ? current : duration,
+      );
     };
     const tick = () => {
       renderTime();
@@ -954,6 +978,10 @@ export async function renderMessageBody(message, payload) {
       }
     };
     const stop = () => {
+      playbackVersion += 1;
+      playing = false;
+      setPlaybackIcon(button, "play");
+      button.setAttribute("aria-label", "Play voice message");
       if (!source) {
         return;
       }
@@ -962,21 +990,35 @@ export async function renderMessageBody(message, payload) {
       source.disconnect();
       source = null;
       cancelAnimationFrame(frame);
-      setPlaybackIcon(button, "play");
-      button.setAttribute("aria-label", "Play voice message");
     };
     const play = async () => {
       stop();
       if (offset >= duration) {
         offset = 0;
       }
-      await playbackContext().resume();
+      const version = playbackVersion;
+      playing = true;
+      setPlaybackIcon(button, "pause");
+      button.setAttribute("aria-label", "Pause voice message");
+      renderTime();
+      try {
+        await playbackContext().resume();
+      } catch (error) {
+        if (version === playbackVersion) {
+          stop();
+          renderTime();
+        }
+        throw error;
+      }
+      if (version !== playbackVersion) return;
       source = playbackContext().createBufferSource();
       source.buffer = buffer;
       source.connect(playbackContext().destination);
       startedAt = playbackContext().currentTime;
       source.onended = () => {
+        source.disconnect();
         source = null;
+        playing = false;
         offset = 0;
         cancelAnimationFrame(frame);
         setPlaybackIcon(button, "play");
@@ -984,8 +1026,6 @@ export async function renderMessageBody(message, payload) {
         renderTime();
       };
       source.start(0, offset);
-      setPlaybackIcon(button, "pause");
-      button.setAttribute("aria-label", "Pause voice message");
       tick();
     };
     const pause = () => {
@@ -994,7 +1034,7 @@ export async function renderMessageBody(message, payload) {
       renderTime();
     };
     const seekTo = (seconds) => {
-      const wasPlaying = Boolean(source);
+      const wasPlaying = playing;
       offset = Math.max(0, Math.min(seconds, duration));
       if (wasPlaying) {
         play().catch((error) => status(error.message, true));
@@ -1007,7 +1047,7 @@ export async function renderMessageBody(message, payload) {
     state.voiceStops.add(stop);
     window.addEventListener("beforeunload", stop, { once: true });
     button.addEventListener("click", () => {
-      if (source) {
+      if (playing) {
         pause();
       } else {
         play().catch((error) => status(error.message, true));
@@ -1016,17 +1056,8 @@ export async function renderMessageBody(message, payload) {
     seek.addEventListener("input", () => {
       seekTo(Number(seek.value));
     });
-    seek.addEventListener("change", () => {
-      seekTo(Number(seek.value));
-    });
-    rewind.addEventListener("click", () => {
-      seekTo(currentTime() - 5);
-    });
-    forward.addEventListener("click", () => {
-      seekTo(currentTime() + 5);
-    });
-
-    player.append(button, rewind, seek, time, forward);
+    waveform.append(seek);
+    player.append(button, waveform, time);
     return player;
   }
   const text = document.createElement("p");

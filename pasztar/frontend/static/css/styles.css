@@ -241,20 +241,8 @@ textarea {
 }
 
 .sidebar {
-  background: linear-gradient(180deg, rgb(18 23 26 / 60%), transparent 120px);
-  position: relative;
   min-height: 0;
   overflow: hidden;
-}
-
-.sidebar::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 1px;
-  background: linear-gradient(180deg, transparent, var(--line), transparent);
 }
 
 .panel {
@@ -455,8 +443,9 @@ label,
   background: rgb(255 255 255 / 4%);
 }
 
-.client.active {
-  background: var(--accent-soft);
+.client.active,
+.client.forward-target:not(:disabled):hover {
+  background: rgb(63 199 174 / 6%);
 }
 
 .client.active::before {
@@ -481,10 +470,6 @@ label,
 
 .client.forward-target::before {
   background: rgb(63 199 174 / 35%);
-}
-
-.client.forward-target:not(:disabled):hover {
-  background: var(--accent-soft);
 }
 
 .client.forward-target:not(:disabled):hover::before {
@@ -529,7 +514,6 @@ label,
 
 .client.online .client-status-dot {
   background: var(--accent);
-  box-shadow: 0 0 10px var(--accent);
 }
 
 .eyebrow {
@@ -1080,10 +1064,11 @@ button.icon-button.active {
 
 .voice-player {
   display: grid;
-  grid-template-columns: 36px 30px minmax(120px, 1fr) auto 30px;
+  grid-template-columns: 44px minmax(0, 1fr) 4ch;
   align-items: center;
-  gap: 9px;
-  width: min(400px, 76vw);
+  gap: 10px;
+  width: min(300px, 72vw);
+  max-width: 100%;
   margin-top: 2px;
   padding: 2px 0;
 }
@@ -1097,81 +1082,61 @@ button.icon-button.active {
 }
 
 .voice-play {
-  width: 34px;
-  min-width: 34px;
-  min-height: 34px;
-  background: var(--warm);
-  color: #241a0a;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  background: transparent;
+  color: var(--message-line-color);
   padding: 0;
 }
 
 .voice-play:hover {
-  background: #ecc186;
-}
-
-.voice-step {
-  width: 28px;
-  min-width: 28px;
-  min-height: 28px;
   background: transparent;
-  color: var(--muted-strong);
-  padding: 0;
-}
-
-.voice-step .icon {
-  width: 15px;
-  height: 15px;
-}
-
-.voice-step:hover {
-  background: rgb(255 255 255 / 6%);
   color: var(--text);
 }
 
-.voice-seek {
-  appearance: none;
-  width: 100%;
+.voice-waveform {
+  position: relative;
   min-width: 0;
-  height: 18px;
-  border: 0;
-  background: transparent;
+  height: 44px;
+}
+
+.voice-waveform::before {
+  content: "";
+  position: absolute;
+  inset: 6px 0;
+  background: linear-gradient(
+    to right,
+    var(--message-line-color) var(--voice-progress, 0%),
+    var(--muted-strong) var(--voice-progress, 0%)
+  );
+  -webkit-mask: var(--waveform-mask) center / 100% 100% no-repeat;
+  mask: var(--waveform-mask) center / 100% 100% no-repeat;
+  pointer-events: none;
+}
+
+.voice-waveform:has(.voice-seek:focus-visible) {
+  outline: 2px solid var(--message-line-color);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.voice-seek {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   padding: 0;
-  accent-color: var(--warm);
-}
-
-.voice-seek::-webkit-slider-runnable-track {
-  height: 3px;
-  border-radius: 999px;
-  background: var(--line-strong);
-}
-
-.voice-seek::-webkit-slider-thumb {
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  margin-top: -4.5px;
-  border: 2px solid var(--panel);
-  border-radius: 999px;
-  background: var(--warm);
-}
-
-.voice-seek::-moz-range-track {
-  height: 3px;
-  border-radius: 999px;
-  background: var(--line-strong);
-}
-
-.voice-seek::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--panel);
-  border-radius: 999px;
-  background: var(--warm);
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .voice-time {
-  color: var(--muted);
-  font-size: 10.5px;
+  color: var(--muted-strong);
+  font-size: 11px;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1483,10 +1448,6 @@ button.icon-button.active {
     height: 100dvh;
   }
 
-  .sidebar::after {
-    display: none;
-  }
-
   .sidebar {
     height: 100dvh;
   }
@@ -1606,20 +1567,5 @@ button.icon-button.active {
 
   .composer.attachments-open .voice-controls {
     right: 112px;
-  }
-
-  .voice-player {
-    width: min(320px, 82vw);
-    grid-template-columns: 34px 28px minmax(88px, 1fr) 28px;
-  }
-
-  .voice-player .voice-step:last-of-type {
-    grid-column: 4;
-    grid-row: 1;
-  }
-
-  .voice-time {
-    grid-column: 3;
-    grid-row: 2;
   }
 }
